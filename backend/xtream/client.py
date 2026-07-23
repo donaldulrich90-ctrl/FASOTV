@@ -10,6 +10,7 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 STREAM_TYPES = {"live": "live", "movie": "movie", "series": "series"}
+XTREAM_HEADERS = {"User-Agent": "krxplayer"}
 
 
 class XtreamClient:
@@ -18,7 +19,7 @@ class XtreamClient:
         self.username = username or settings.XTREAM_USERNAME
         self.password = password or settings.XTREAM_PASSWORD
         self.session = requests.Session()
-        self.session.headers["User-Agent"] = "FasoTV/1.0"
+        self.session.headers.update(XTREAM_HEADERS)
 
     @property
     def _base_params(self) -> Dict[str, str]:
