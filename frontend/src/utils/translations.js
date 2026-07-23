@@ -1047,6 +1047,18 @@ const translations = {
   lang_en: { fr: "Anglais", en: "English", mo: "Ãngele", di: "Angilɛkan" },
   lang_mo: { fr: "Mooré", en: "Mooré", mo: "Moore", di: "Morekan" },
   lang_di: { fr: "Dioula", en: "Dioula", mo: "Dioula", di: "Julakan" },
+  lang_confirm_title: {
+    fr: "Changer la langue ?",
+    en: "Change language?",
+    mo: "Goam tekre?",
+    di: "Kan changeli?"
+  },
+  lang_confirm_body: {
+    fr: "Toute l'interface sera traduite en",
+    en: "The whole interface will switch to",
+    mo: "Bũmb fãa na tekame",
+    di: "Bɛɛ bɛ changeli"
+  },
 
   // ══════════════════════════════════════
   // PARAMÈTRES & SONS

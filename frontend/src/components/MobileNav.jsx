@@ -11,23 +11,33 @@ import {
 } from "react-icons/md";
 
 const LANGS = [
-  { code: "fr", flag: "🇫🇷", label: "Français" },
-  { code: "en", flag: "🇬🇧", label: "English" },
-  { code: "more", flag: "🇧🇫", label: "Mooré" },
-  { code: "dioula", flag: "🇬🇳", label: "Dioula" },
+  { code: "fr", flag: "🇫🇷", labelKey: "lang_fr" },
+  { code: "en", flag: "🇬🇧", labelKey: "lang_en" },
+  { code: "mo", flag: "🇧🇫", labelKey: "lang_mo" },
+  { code: "di", flag: "🇬🇳", labelKey: "lang_di" },
 ];
 
 const MAIN_NAV = [
-  { to: "/", icon: MdHome, label: "Accueil", end: true },
-  { to: "/live", icon: MdLiveTv, label: "Live" },
-  { to: "/clips", icon: MdMusicNote, label: "Clips" },
-  { to: "/vpn", icon: MdVpnKey, label: "VPN" },
-  { to: "/plans", icon: MdStar, label: "Forfaits" },
+  { to: "/", icon: MdHome, key: "nav_home", end: true },
+  { to: "/live", icon: MdLiveTv, key: "nav_live_tv" },
+  { to: "/clips", icon: MdMusicNote, key: "nav_clips" },
+  { to: "/vpn", icon: MdVpnKey, key: "nav_vpn" },
+  { to: "/plans", icon: MdStar, key: "nav_plans" },
+];
+
+const MORE_NAV = [
+  { to: "/movies", icon: MdMovie, key: "nav_movies" },
+  { to: "/series", icon: MdVideoLibrary, key: "nav_series" },
+  { to: "/search", icon: MdSearch, key: "nav_search" },
+  { to: "/promote", icon: MdCampaign, key: "promo_title" },
+  { to: "/reseller", icon: MdMonetizationOn, key: "nav_reseller" },
+  { to: "/settings", icon: MdSettings, key: "nav_settings" },
 ];
 
 export default function MobileNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [pendingLang, setPendingLang] = useState(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { t, lang, changeLang } = useTranslation();
@@ -35,11 +45,25 @@ export default function MobileNav() {
 
   const handleLogout = () => { logout(); navigate("/login"); setMenuOpen(false); };
 
+  const requestLangChange = (code) => {
+    if (code === lang) { setLangOpen(false); return; }
+    setPendingLang(code);
+    setLangOpen(false);
+  };
+
+  const confirmLangChange = () => {
+    changeLang(pendingLang);
+    setPendingLang(null);
+  };
+
+  const currentLang = LANGS.find((l) => l.code === lang) || LANGS[0];
+  const pendingLangInfo = LANGS.find((l) => l.code === pendingLang);
+
   return (
     <>
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface/95 backdrop-blur border-t border-border z-50">
         <div className="flex">
-          {MAIN_NAV.map(({ to, icon: Icon, label, end }) => (
+          {MAIN_NAV.map(({ to, icon: Icon, key, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -51,7 +75,7 @@ export default function MobileNav() {
               }
             >
               <Icon className="text-xl" />
-              <span>{label}</span>
+              <span>{t(key)}</span>
             </NavLink>
           ))}
           <button
@@ -59,7 +83,7 @@ export default function MobileNav() {
             className="flex-1 flex flex-col items-center gap-1 py-2.5 text-xs text-white/50"
           >
             <MdMenu className="text-xl" />
-            <span>Plus</span>
+            <span>{t("nav_more")}</span>
           </button>
         </div>
       </nav>
@@ -70,20 +94,13 @@ export default function MobileNav() {
           <div className="absolute inset-0 bg-black/60" onClick={() => setMenuOpen(false)} />
           <div className="relative bg-surface border-t border-border rounded-t-2xl p-4 space-y-1 pb-8">
             <div className="flex items-center justify-between mb-3">
-              <p className="font-semibold text-sm">Menu</p>
+              <p className="font-semibold text-sm">{t("nav_more")}</p>
               <button onClick={() => setMenuOpen(false)} className="text-white/40 hover:text-white">
                 <MdClose className="text-xl" />
               </button>
             </div>
 
-            {[
-              { to: "/movies", icon: MdMovie, label: "Films" },
-              { to: "/series", icon: MdVideoLibrary, label: "Séries" },
-              { to: "/search", icon: MdSearch, label: "Recherche" },
-              { to: "/promote", icon: MdCampaign, label: "Promouvoir" },
-              { to: "/reseller", icon: MdMonetizationOn, label: "Espace Revendeur" },
-              { to: "/settings", icon: MdSettings, label: "Paramètres" },
-            ].map(({ to, icon: Icon, label }) => (
+            {MORE_NAV.map(({ to, icon: Icon, key }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -93,14 +110,14 @@ export default function MobileNav() {
                 }
               >
                 <Icon className="text-xl flex-shrink-0" />
-                <span className="text-sm font-medium">{label}</span>
+                <span className="text-sm font-medium">{t(key)}</span>
               </NavLink>
             ))}
 
             {admin && (
               <NavLink to="/admin" onClick={() => setMenuOpen(false)} className="sidebar-link text-gold">
                 <MdAdminPanelSettings className="text-xl flex-shrink-0 text-gold" />
-                <span className="text-sm font-medium">Administration</span>
+                <span className="text-sm font-medium">{t("nav_admin")}</span>
               </NavLink>
             )}
 
@@ -112,7 +129,7 @@ export default function MobileNav() {
               >
                 <MdLanguage className="text-xl flex-shrink-0 text-white/60" />
                 <span className="text-sm font-medium flex-1">
-                  {LANGS.find((l) => l.code === lang)?.flag} {LANGS.find((l) => l.code === lang)?.label}
+                  {currentLang.flag} {t(currentLang.labelKey)}
                 </span>
               </button>
               {langOpen && (
@@ -120,11 +137,11 @@ export default function MobileNav() {
                   {LANGS.map((l) => (
                     <button
                       key={l.code}
-                      onClick={() => { changeLang(l.code); setLangOpen(false); }}
+                      onClick={() => requestLangChange(l.code)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-btn text-sm transition-colors ${lang === l.code ? "bg-gold/20 text-gold font-semibold" : "bg-card text-white/60 hover:text-white"}`}
                     >
                       <span>{l.flag}</span>
-                      <span>{l.label}</span>
+                      <span>{t(l.labelKey)}</span>
                     </button>
                   ))}
                 </div>
@@ -133,8 +150,29 @@ export default function MobileNav() {
 
             <button onClick={handleLogout} className="sidebar-link w-full text-left text-live/70 hover:text-live">
               <MdLogout className="text-xl flex-shrink-0" />
-              <span className="text-sm font-medium">Déconnexion</span>
+              <span className="text-sm font-medium">{t("nav_logout")}</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmation changement de langue */}
+      {pendingLang && pendingLangInfo && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setPendingLang(null)} />
+          <div className="relative bg-surface border border-border rounded-card shadow-2xl p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-2">{t("lang_confirm_title")}</h3>
+            <p className="text-white/60 text-sm mb-6">
+              {t("lang_confirm_body")} <span className="text-white font-semibold">{pendingLangInfo.flag} {t(pendingLangInfo.labelKey)}</span>
+            </p>
+            <div className="flex gap-3">
+              <button onClick={confirmLangChange} className="btn-primary flex-1">
+                {t("msg_confirm")}
+              </button>
+              <button onClick={() => setPendingLang(null)} className="btn-outline flex-1">
+                {t("btn_cancel")}
+              </button>
+            </div>
           </div>
         </div>
       )}
