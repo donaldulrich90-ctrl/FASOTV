@@ -1,4 +1,4 @@
-from django.urls import path
+from django.urls import path, re_path
 from . import views
 
 urlpatterns = [
@@ -9,4 +9,7 @@ urlpatterns = [
     path("series/", views.XtreamSeriesView.as_view(), name="xtream-series"),
     path("epg/<int:stream_id>/", views.XtreamEPGView.as_view(), name="xtream-epg"),
     path("sync/", views.XtreamSyncView.as_view(), name="xtream-sync"),
+    path("proxy/<int:stream_id>/", views.XtreamStreamProxyView.as_view(), name="xtream-proxy"),
+    re_path(r"^proxy-segment/(?P<path>.+)$", views.XtreamSegmentProxyView.as_view(), name="xtream-proxy-segment"),
+    path("proxy-url/", views.XtreamURLProxyView.as_view(), name="xtream-proxy-url"),
 ]
