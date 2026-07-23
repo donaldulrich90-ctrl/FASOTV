@@ -29,6 +29,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     has_active_subscription = serializers.BooleanField(read_only=True)
     is_reseller = serializers.SerializerMethodField()
+    adult_pin_set = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -36,14 +37,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "id", "phone", "name", "email", "avatar",
             "plan_actif", "date_expiration", "has_active_subscription",
             "is_reseller", "date_joined",
+            "adult_enabled", "adult_pin_set",
         )
-        read_only_fields = ("phone", "plan_actif", "date_expiration", "date_joined")
+        read_only_fields = ("phone", "plan_actif", "date_expiration", "date_joined", "adult_enabled")
 
     def get_is_reseller(self, obj):
         try:
             return obj.reseller_profile.is_active
         except Exception:
             return False
+
+    def get_adult_pin_set(self, obj):
+        return bool(obj.adult_pin_hash)
 
 
 class ChangePasswordSerializer(serializers.Serializer):

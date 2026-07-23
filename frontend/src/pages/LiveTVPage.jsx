@@ -1,9 +1,13 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useChannels } from "../hooks/useChannels";
+import { usePaginatedChannels } from "../hooks/useChannels";
 import { MdSearch, MdLiveTv, MdFavorite, MdFavoriteBorder, MdPeople } from "react-icons/md";
 import api from "../services/api";
 import toast from "react-hot-toast";
+
+function SkeletonCard() {
+  return <div className="card p-3 h-20 animate-pulse bg-card/60" />;
+}
 
 function CategoryFilter({ categories, active, onChange }) {
   return (
@@ -66,18 +70,34 @@ function ChannelCard({ channel, onPlay, onFav, isFav }) {
 }
 
 export default function LiveTVPage() {
-  const { channels, categories, loading } = useChannels();
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState(null);
+  const [categories, setCategories] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
+  const loaderRef = useRef(null);
   const navigate = useNavigate();
 
-  const filtered = useMemo(() => {
-    let list = channels;
-    if (activeCategory) list = list.filter((c) => c.category_id === activeCategory);
-    if (search.trim()) list = list.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
-    return list;
-  }, [channels, activeCategory, search]);
+  useEffect(() => {
+    api.get("/channels/categories/").then((r) => setCategories(r.data.results || r.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { items: channels, loading, loadingMore, hasMore, loadMore } = usePaginatedChannels(debouncedSearch, activeCategory);
+
+  useEffect(() => {
+    if (!loaderRef.current) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting && hasMore && !loadingMore) loadMore(); },
+      { threshold: 0.1 }
+    );
+    obs.observe(loaderRef.current);
+    return () => obs.disconnect();
+  }, [hasMore, loadingMore, loadMore]);
 
   const toggleFav = async (channel) => {
     try {
@@ -98,14 +118,12 @@ export default function LiveTVPage() {
 
   return (
     <div className="p-4 md:p-6 space-y-5 animate-fade-in">
-      {/* Header */}
       <div className="flex items-center gap-3">
         <MdLiveTv className="text-gold text-2xl flex-shrink-0" />
         <h1 className="text-2xl font-bold">Live TV</h1>
-        <span className="badge-live ml-auto">{filtered.length} chaînes</span>
+        <span className="badge-live ml-auto">{loading ? "…" : `${channels.length}+ chaînes`}</span>
       </div>
 
-      {/* Search */}
       <div className="relative">
         <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-lg" />
         <input
@@ -117,33 +135,36 @@ export default function LiveTVPage() {
         />
       </div>
 
-      {/* Category filter */}
       <CategoryFilter categories={categories} active={activeCategory} onChange={setActiveCategory} />
 
-      {/* Channel grid */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="card p-3 h-20 animate-pulse bg-card" />
-          ))}
+          {Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : channels.length === 0 ? (
         <div className="text-center py-16 text-white/40">
           <MdLiveTv className="text-5xl mx-auto mb-3" />
           <p>Aucune chaîne trouvée</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {filtered.map((ch) => (
-            <ChannelCard
-              key={ch.id}
-              channel={ch}
-              onPlay={() => navigate(`/player/live/${ch.id}`)}
-              onFav={() => toggleFav(ch)}
-              isFav={favorites.has(ch.id)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {channels.map((ch) => (
+              <ChannelCard
+                key={ch.id}
+                channel={ch}
+                onPlay={() => navigate(`/player/live/${ch.id}`)}
+                onFav={() => toggleFav(ch)}
+                isFav={favorites.has(ch.id)}
+              />
+            ))}
+          </div>
+          <div ref={loaderRef} className="py-4 text-center text-white/30 text-sm">
+            {loadingMore && (
+              <div className="w-6 h-6 border-2 border-gold/20 border-t-gold rounded-full animate-spin mx-auto" />
+            )}
+          </div>
+        </>
       )}
     </div>
   );

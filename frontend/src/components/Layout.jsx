@@ -3,6 +3,29 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import MobileNav from "./MobileNav";
 import useTranslation from "../hooks/useTranslation";
+import { RadioPlayerProvider, useRadioPlayer } from "../context/RadioPlayerContext";
+import { MdRadio, MdPause, MdPlayArrow, MdClose } from "react-icons/md";
+
+function RadioBar() {
+  const { station, playing, toggle, stop } = useRadioPlayer();
+  if (!station) return null;
+  return (
+    <div className="fixed bottom-16 md:bottom-0 left-0 md:left-64 right-0 z-40 bg-surface/95 backdrop-blur border-t border-gold/20 px-4 py-2 flex items-center gap-3">
+      <MdRadio className="text-gold text-lg flex-shrink-0" />
+      <p className="flex-1 text-sm font-medium truncate min-w-0">{station.name}</p>
+      <span className={`text-xs flex items-center gap-1 ${playing ? "text-gold" : "text-white/40"}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${playing ? "bg-gold animate-pulse" : "bg-white/30"}`} />
+        {playing ? "LIVE" : "Pause"}
+      </span>
+      <button onClick={toggle} className="w-8 h-8 rounded-full bg-gold text-black flex items-center justify-center flex-shrink-0">
+        {playing ? <MdPause className="text-base" /> : <MdPlayArrow className="text-base" />}
+      </button>
+      <button onClick={stop} className="text-white/30 hover:text-white flex-shrink-0">
+        <MdClose className="text-lg" />
+      </button>
+    </div>
+  );
+}
 
 export default function Layout() {
   const { t } = useTranslation();
@@ -30,6 +53,7 @@ export default function Layout() {
   };
 
   return (
+    <RadioPlayerProvider>
     <div className="flex h-screen overflow-hidden bg-bg">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex w-64 flex-shrink-0">
@@ -43,6 +67,9 @@ export default function Layout() {
 
       {/* Mobile Bottom Nav */}
       <MobileNav />
+
+      {/* Radio persistent player */}
+      <RadioBar />
 
       {/* PWA Install Banner */}
       {bannerVisible && (
@@ -65,5 +92,6 @@ export default function Layout() {
         </div>
       )}
     </div>
+    </RadioPlayerProvider>
   );
 }

@@ -11,6 +11,7 @@ const translations = {
   nav_live_tv: { fr: "TV Direct", en: "Live TV", mo: "TV Vẽenega", di: "TV Kɛnɛ na" },
   nav_movies: { fr: "Films", en: "Movies", mo: "Filim-dãmba", di: "Filimuw" },
   nav_series: { fr: "Séries", en: "Series", mo: "Seri-rãmba", di: "Seriw" },
+  nav_radio: { fr: "Radio", en: "Radio", mo: "Radio", di: "Radio" },
   nav_clips: { fr: "Clips", en: "Clips", mo: "Yɩɩl-video", di: "Dɔnkili video" },
   nav_vpn: { fr: "VPN", en: "VPN", mo: "VPN", di: "VPN" },
   nav_plans: { fr: "Forfaits", en: "Plans", mo: "Yaood-pʋʋse", di: "Saratiw" },
@@ -28,6 +29,7 @@ const translations = {
   // ══════════════════════════════════════
 
   btn_watch: { fr: "Regarder", en: "Watch", mo: "Ges-y", di: "A lajɛ" },
+  btn_regarder: { fr: "Regarder", en: "Watch", mo: "Ges-y", di: "A lajɛ" },
   btn_subscribe: { fr: "S'abonner", en: "Subscribe", mo: "Kẽ-y abonnã", di: "I tɔgɔ sɛbɛn" },
   btn_see_more: { fr: "Voir plus", en: "See more", mo: "Ges-y n paase", di: "A ye dɔ" },
   btn_load_more: { fr: "Charger plus", en: "Load more", mo: "Loog-y n paase", di: "A dafa" },
@@ -370,6 +372,12 @@ const translations = {
     en: "Loading...",
     mo: "A sẽn dɩtã...",
     di: "A bɛ donna..."
+  },
+  player_buffering: {
+    fr: "Mise en mémoire tampon…",
+    en: "Buffering…",
+    mo: "A sẽn bɩtẽ...",
+    di: "A bɛ daminɛ..."
   },
 
   // ══════════════════════════════════════
@@ -1101,6 +1109,26 @@ const translations = {
     mo: "Sẽn ka tʋmdã",
     di: "A sigilen tɛ"
   },
+
+  // ══════════════════════════════════════
+  // CONTRÔLE PARENTAL
+  // ══════════════════════════════════════
+
+  parental_title: { fr: "Contrôle parental", en: "Parental Control", mo: "Kambã-rãmba karemde", di: "Denmisɛnw kɔlɔsili" },
+  parental_enable: { fr: "Autoriser le contenu adulte", en: "Allow adult content", mo: "Bĩng-y ninẽ kõmpuutri dẽngã", di: "Cɛkɔrɔw content sɔrɔ" },
+  parental_pin_create: { fr: "Créer votre code PIN", en: "Create your PIN", mo: "Maan-y yãmb PIN koodã", di: "I PIN code dilan" },
+  parental_pin_confirm: { fr: "Confirmer votre code PIN", en: "Confirm your PIN", mo: "Kɩs-y yãmb PIN koodã", di: "I PIN code kɛlɛ" },
+  parental_pin_enter: { fr: "Entrez votre code à 4 chiffres", en: "Enter your 4-digit PIN", mo: "Ges-y yãmb nõmero 4", di: "I nɔmɔrɔ 4 don" },
+  parental_pin_change: { fr: "Modifier le code", en: "Change PIN", mo: "Tek-y koodã n manege", di: "Code changeli" },
+  parental_pin_wrong: { fr: "Code incorrect — {n} tentatives restantes", en: "Wrong PIN — {n} attempts left", mo: "Kood sẽn ka tɩ — {n} sẽn keta", di: "Code tɛ — {n} min tora" },
+  parental_pin_locked: { fr: "Trop de tentatives. Réessayez dans {n} min", en: "Too many attempts. Try again in {n} min", mo: "Y kõ-kõ wʋsg n yɩɩd — Loog-y n leb {n} miniti pʋgẽ", di: "I a kɛla ka ca — Segin {n} miniti kɔnɔ" },
+  parental_pin_weak: { fr: "Choisissez un code moins évident", en: "Choose a less obvious PIN", mo: "Tẽeg-y kood sẽn sãnem n yɩɩd", di: "Code wɛrɛ sugandi min ka nɔgɔn" },
+  parental_pin_mismatch: { fr: "Les codes ne correspondent pas", en: "PINs do not match", mo: "Kood-rãmba ka yaa yembre ye", di: "Codew tɛ kɛlɛ" },
+  parental_unlock: { fr: "Déverrouiller le contenu adulte", en: "Unlock adult content", mo: "Yiis-y kõmpuutri dẽngã laafã", di: "Cɛkɔrɔw content laɲini" },
+  parental_lock_now: { fr: "Verrouiller maintenant", en: "Lock now", mo: "Kẽneg-y masã", di: "A latugu sisan" },
+  parental_disable: { fr: "Désactiver le contrôle parental", en: "Disable parental control", mo: "Yik-y kambã-rãmba karemde", di: "Denmisɛnw kɔlɔsili bɔ" },
+  parental_session_active: { fr: "Session déverrouillée", en: "Session unlocked", mo: "Sɛsiyõ laafame", di: "Sɛsiyon laɲinnen bɛ" },
+  parental_enter_current: { fr: "Entrez votre code actuel", en: "Enter your current PIN", mo: "Ges-y yãmb kood sẽn be masãã", di: "I code kɔnɔna don" },
 
 };
 

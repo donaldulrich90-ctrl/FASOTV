@@ -4,6 +4,7 @@ import {
   MdPlayArrow, MdPause, MdVolumeUp, MdVolumeOff,
   MdFullscreen, MdFullscreenExit, MdHd, MdReplay, MdSignalCellularAlt,
 } from "react-icons/md";
+import useTranslation from "../hooks/useTranslation";
 
 const LIVE_RE = /\/live\/[^/]+\/[^/]+\/(\d+)\.m3u8/;
 
@@ -14,6 +15,7 @@ function getProxyUrl(url) {
 }
 
 export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = true }) {
+  const { t } = useTranslation();
   const videoRef = useRef(null);
   const hlsRef = useRef(null);
   const containerRef = useRef(null);
@@ -69,7 +71,22 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
     if (Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true, backBufferLength: 90 });
+      const hls = new Hls({
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferSize: 120 * 1000 * 1000,
+        liveSyncDurationCount: 6,
+        liveMaxLatencyDurationCount: 15,
+        manifestLoadingTimeOut: 20000,
+        manifestLoadingMaxRetry: 4,
+        levelLoadingTimeOut: 20000,
+        fragLoadingTimeOut: 60000,
+        fragLoadingMaxRetry: 6,
+        fragLoadingRetryDelay: 1000,
+        startLevel: -1,
+        abrEwmaDefaultEstimate: 1000000,
+        lowLatencyMode: false,
+      });
       hlsRef.current = hls;
       hls.loadSource(url);
       hls.attachMedia(video);
@@ -85,6 +102,8 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         const bw = d.frag.stats.bwEstimate;
         if (bw) setBandwidth(Math.round(bw / 1000));
       });
+
+      hls.on(Hls.Events.BUFFER_EMPTIED, () => setBuffering(true));
 
       hls.on(Hls.Events.ERROR, (_, d) => {
         if (d.fatal) {
@@ -235,10 +254,11 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     >
       <video ref={videoRef} className="w-full h-full" playsInline />
 
-      {/* Buffering spinner */}
+      {/* Buffering spinner + label */}
       {buffering && !error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none gap-3">
           <div className="w-12 h-12 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
+          <p className="text-white/70 text-sm">{t("player_buffering")}</p>
         </div>
       )}
 
@@ -315,7 +335,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
           {/* Bandwidth (desktop only) */}
           {bandwidth > 0 && (
-            <span className="text-white/40 text-xs hidden md:block">
+            <span className="text-white/40 text-xs">
               {bandwidth >= 1000 ? `${(bandwidth / 1000).toFixed(1)} Mb/s` : `${bandwidth} kb/s`}
             </span>
           )}

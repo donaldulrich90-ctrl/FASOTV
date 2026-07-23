@@ -14,12 +14,18 @@ XTREAM_HEADERS = {"User-Agent": "krxplayer"}
 
 
 class XtreamClient:
-    def __init__(self, server_url: str = None, username: str = None, password: str = None):
+    def __init__(
+        self,
+        server_url: str = None,
+        username: str = None,
+        password: str = None,
+        user_agent: str = "krxplayer",
+    ):
         self.server_url = (server_url or settings.XTREAM_SERVER_URL).rstrip("/")
         self.username = username or settings.XTREAM_USERNAME
         self.password = password or settings.XTREAM_PASSWORD
         self.session = requests.Session()
-        self.session.headers.update(XTREAM_HEADERS)
+        self.session.headers.update({"User-Agent": user_agent})
 
     @property
     def _base_params(self) -> Dict[str, str]:

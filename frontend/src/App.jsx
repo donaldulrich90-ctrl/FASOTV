@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LangProvider } from "./context/LangContext";
+import { AdultPinProvider } from "./context/AdultPinContext";
 import Layout from "./components/Layout";
 import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
@@ -17,6 +18,7 @@ import ResellerDashboard from "./pages/ResellerDashboard";
 import BecomeResellerPage from "./pages/BecomeResellerPage";
 import AdminPage from "./pages/admin/AdminPage";
 import ClipsPage from "./pages/ClipsPage";
+import RadioPage from "./pages/RadioPage";
 import VPNPage from "./pages/VPNPage";
 import PromotePage from "./pages/PromotePage";
 import { initializeData } from "./utils/store";
@@ -47,6 +49,7 @@ function AppRoutes() {
         <Route path="/movies" element={<MoviesPage />} />
         <Route path="/series" element={<SeriesPage />} />
         <Route path="/series/:id" element={<SeriesDetailPage />} />
+        <Route path="/radio" element={<RadioPage />} />
         <Route path="/clips" element={<ClipsPage />} />
         <Route path="/vpn" element={<VPNPage />} />
         <Route path="/promote" element={<PromotePage />} />
@@ -67,7 +70,9 @@ export default function App() {
   return (
     <LangProvider>
       <AuthProvider>
-        <AppRoutes />
+        <AdultPinProvider>
+          <AppRoutes />
+        </AdultPinProvider>
       </AuthProvider>
     </LangProvider>
   );

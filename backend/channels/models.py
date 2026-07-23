@@ -6,6 +6,7 @@ class Category(models.Model):
     icon = models.CharField(max_length=50, blank=True, help_text="Nom d'icône (ex: tv, sports, news)")
     order = models.PositiveSmallIntegerField(default=0)
     slug = models.SlugField(unique=True)
+    is_adult = models.BooleanField(default=False, db_index=True)
 
     class Meta:
         ordering = ["order", "name"]
@@ -28,6 +29,9 @@ class Channel(models.Model):
     xtream_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     viewers_count = models.PositiveIntegerField(default=0)
     is_featured = models.BooleanField(default=False)
+    is_high_bitrate = models.BooleanField(default=False, db_index=True, help_text="Flux >15 Mbit/s (4K/8K/RAW) — masqué aux utilisateurs jusqu'au transcodage")
+    is_radio = models.BooleanField(default=False, db_index=True, help_text="Station radio (audio uniquement)")
+    is_adult = models.BooleanField(default=False, db_index=True, help_text="Contenu adulte — masqué sans PIN")
     language = models.CharField(max_length=50, blank=True)
     country = models.CharField(max_length=50, blank=True, default="BF")
 

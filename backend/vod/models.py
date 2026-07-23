@@ -15,6 +15,7 @@ class Movie(models.Model):
     duration = models.PositiveIntegerField(null=True, blank=True, help_text="Durée en minutes")
     is_featured = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    is_adult = models.BooleanField(default=False, db_index=True, help_text="Contenu adulte — masqué sans PIN")
     xtream_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -36,6 +37,7 @@ class Series(models.Model):
     total_seasons = models.PositiveSmallIntegerField(default=1)
     is_active = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
+    is_adult = models.BooleanField(default=False, db_index=True, help_text="Contenu adulte — masqué sans PIN")
     xtream_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
 

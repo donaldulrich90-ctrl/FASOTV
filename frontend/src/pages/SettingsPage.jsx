@@ -1,13 +1,16 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useAdultPin } from "../context/AdultPinContext";
 import { authService } from "../services/authService";
 import api from "../services/api";
 import toast from "react-hot-toast";
 import useTranslation from "../hooks/useTranslation";
+import PinPad from "../components/PinPad";
 import {
   MdSettings, MdPerson, MdLock, MdTv, MdLink, MdLogout,
   MdSave, MdVisibility, MdVisibilityOff, MdSync,
+  MdShield, MdLockOpen, MdClose,
 } from "react-icons/md";
 
 function Section({ title, icon: Icon, children }) {
@@ -21,8 +24,90 @@ function Section({ title, icon: Icon, children }) {
   );
 }
 
+// PIN modal — mode: "create" | "change_current" | "disable" | "unlock"
+function PinModal({ mode, onClose, onDone, t }) {
+  const [step, setStep] = useState(mode);
+  const [savedCurrent, setSavedCurrent] = useState("");
+  const [savedNew, setSavedNew] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const { unlock } = useAdultPin();
+
+  const submit = async (fn) => {
+    setBusy(true);
+    setError("");
+    try { await fn(); onDone(); }
+    catch (e) {
+      const code = e.response?.data?.code;
+      if (code === "locked") {
+        setError(t("parental_pin_locked").replace("{n}", e.response.data.wait_minutes ?? 15));
+      } else if (code === "parental_pin_weak") {
+        setError(t("parental_pin_weak"));
+      } else {
+        const n = e.response?.data?.attempts_remaining;
+        setError(n != null ? t("parental_pin_wrong").replace("{n}", n) : t("msg_error"));
+      }
+    }
+    finally { setBusy(false); }
+  };
+
+  const handlePin = (pin) => {
+    setError("");
+    if (step === "create") { setSavedNew(pin); setStep("confirm"); return; }
+    if (step === "confirm") {
+      if (pin !== savedNew) { setError(t("parental_pin_mismatch")); return; }
+      submit(() => api.post("/accounts/adult-pin/set/", { pin }));
+      return;
+    }
+    if (step === "change_current") { setSavedCurrent(pin); setStep("change_new"); return; }
+    if (step === "change_new") { setSavedNew(pin); setStep("change_confirm"); return; }
+    if (step === "change_confirm") {
+      if (pin !== savedNew) { setError(t("parental_pin_mismatch")); return; }
+      submit(() => api.post("/accounts/adult-pin/set/", { pin, current_pin: savedCurrent }));
+      return;
+    }
+    if (step === "disable") {
+      submit(() => api.post("/accounts/adult-pin/disable/", { pin }));
+      return;
+    }
+    if (step === "unlock") {
+      submit(async () => {
+        await api.post("/accounts/adult-pin/verify/", { pin });
+        unlock();
+      });
+      return;
+    }
+  };
+
+  const titles = {
+    create: t("parental_pin_create"),
+    confirm: t("parental_pin_confirm"),
+    change_current: t("parental_enter_current"),
+    change_new: t("parental_pin_create"),
+    change_confirm: t("parental_pin_confirm"),
+    disable: t("parental_enter_current"),
+    unlock: t("parental_pin_enter"),
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
+      <div className="relative bg-surface border border-border rounded-card shadow-2xl p-6 w-full max-w-sm">
+        <div className="flex items-center justify-between mb-5">
+          <h3 className="text-lg font-bold">{titles[step]}</h3>
+          <button onClick={onClose} className="text-white/40 hover:text-white">
+            <MdClose className="text-xl" />
+          </button>
+        </div>
+        <PinPad onComplete={handlePin} disabled={busy} error={error} />
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { user, logout, refreshUser } = useAuth();
+  const { isUnlocked, lock } = useAdultPin();
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -43,6 +128,9 @@ export default function SettingsPage() {
   const [xtreamPass, setXtreamPass] = useState(localStorage.getItem("xtream_pass") || "");
   const [m3uUrl, setM3uUrl] = useState(localStorage.getItem("m3u_url") || "");
   const [syncingXtream, setSyncingXtream] = useState(false);
+
+  // PIN modal
+  const [pinModal, setPinModal] = useState(null);
 
   const saveProfile = async (e) => {
     e.preventDefault();
@@ -109,6 +197,15 @@ export default function SettingsPage() {
     navigate("/login");
   };
 
+  const pinModalDone = () => {
+    setPinModal(null);
+    refreshUser();
+    toast.success(t("msg_success"));
+  };
+
+  const adultEnabled = user?.adult_enabled;
+  const pinSet = user?.adult_pin_set;
+
   return (
     <div className="p-4 md:p-6 space-y-5 max-w-2xl animate-fade-in">
       <div className="flex items-center gap-3">
@@ -170,6 +267,51 @@ export default function SettingsPage() {
         </form>
       </Section>
 
+      {/* Parental Control */}
+      <Section title={t("parental_title")} icon={MdShield}>
+        {!adultEnabled ? (
+          <div className="space-y-3">
+            <p className="text-sm text-white/60">{t("parental_enable")}</p>
+            <button
+              onClick={() => setPinModal("create")}
+              className="btn-primary flex items-center gap-2"
+            >
+              <MdLock />{t("parental_pin_create")}
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              {isUnlocked ? (
+                <span className="text-success flex items-center gap-1.5">
+                  <MdLockOpen className="text-base" />{t("parental_session_active")}
+                </span>
+              ) : (
+                <span className="text-white/50 flex items-center gap-1.5">
+                  <MdLock className="text-base" />{t("parental_pin_enter")}
+                </span>
+              )}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {isUnlocked && (
+                <button onClick={lock} className="btn-outline flex items-center gap-2 text-sm text-live/70 border-live/30 hover:text-live hover:border-live">
+                  <MdLock />{t("parental_lock_now")}
+                </button>
+              )}
+              <button onClick={() => setPinModal("change_current")} className="btn-outline flex items-center gap-2 text-sm">
+                <MdLock />{t("parental_pin_change")}
+              </button>
+              <button
+                onClick={() => setPinModal("disable")}
+                className="btn-outline flex items-center gap-2 text-sm text-live/70 border-live/30 hover:text-live hover:border-live"
+              >
+                <MdShield />{t("parental_disable")}
+              </button>
+            </div>
+          </div>
+        )}
+      </Section>
+
       {/* Xtream / M3U — admin uniquement */}
       {(user?.is_staff || user?.is_superuser) && (
         <Section title={t("live_xtream")} icon={MdTv}>
@@ -225,6 +367,16 @@ export default function SettingsPage() {
           <span className="font-medium">{t("nav_logout")}</span>
         </button>
       </div>
+
+      {/* PIN modal */}
+      {pinModal && (
+        <PinModal
+          mode={pinModal}
+          onClose={() => setPinModal(null)}
+          onDone={pinModalDone}
+          t={t}
+        />
+      )}
     </div>
   );
 }

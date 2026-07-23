@@ -1,15 +1,24 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { getSeries, isFavorite, addFavorite, removeFavorite } from "../utils/store";
+import { isFavorite, addFavorite, removeFavorite } from "../utils/store";
 import useTranslation from "../hooks/useTranslation";
+import api from "../services/api";
 import {
-  MdSearch, MdVideoLibrary, MdStar, MdPlayArrow,
-  MdNavigateBefore, MdNavigateNext, MdClose,
+  MdSearch, MdVideoLibrary, MdStar, MdPlayArrow, MdClose,
   MdFavorite, MdFavoriteBorder, MdWhatsapp,
 } from "react-icons/md";
 
-const CATEGORIES = ["series_tous", "series_bf", "series_africaines", "series_docs"];
-const CAT_KEYS = { series_tous: null, series_bf: "Séries Burkinabées", series_africaines: "Séries Africaines", series_docs: "Documentaires" };
+// ─── Skeleton ────────────────────────────────────────────────────────────────
+
+function SkeletonCard() {
+  return (
+    <div className="animate-pulse">
+      <div className="aspect-[2/3] rounded-card bg-card/60" />
+      <div className="h-3 bg-card/60 rounded mt-2 w-3/4" />
+      <div className="h-2 bg-card/40 rounded mt-1 w-1/2" />
+    </div>
+  );
+}
 
 // ─── Series Card ──────────────────────────────────────────────────────────────
 
@@ -45,25 +54,30 @@ function SeriesCard({ series, onClick }) {
             <MdStar className="text-[10px]" /> {series.rating}
           </div>
         )}
-        {series.is_burkinabe && (
-          <div className="absolute top-2 left-2 bg-black/70 text-[10px] px-1.5 py-0.5 rounded-badge font-bold text-gold">
-            🇧🇫
+        {series.is_featured && (
+          <div className="absolute top-2 left-2 bg-gold/90 text-[10px] px-1.5 py-0.5 rounded-badge font-bold text-black">
+            À LA UNE
           </div>
         )}
       </div>
       <p className="text-sm font-medium mt-2 truncate group-hover:text-gold transition-colors">{series.title}</p>
-      <p className="text-xs text-white/40">{series.genre} · {series.year}</p>
+      <p className="text-xs text-white/40">{series.genre}</p>
     </button>
   );
 }
 
-// ─── BF Hero Slider ───────────────────────────────────────────────────────────
+// ─── Featured Hero ────────────────────────────────────────────────────────────
 
-function BFHeroSlider({ series, onPlay }) {
+function FeaturedHero({ onOpen }) {
   const { t } = useTranslation();
+  const [featured, setFeatured] = useState([]);
   const [idx, setIdx] = useState(0);
-  const featured = series.filter((s) => s.is_featured && s.is_burkinabe);
-  const item = featured[idx];
+
+  useEffect(() => {
+    api.get("/vod/series/", { params: { is_featured: true, page_size: 5 } })
+      .then((r) => setFeatured(r.data.results || r.data))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (featured.length <= 1) return;
@@ -71,6 +85,7 @@ function BFHeroSlider({ series, onPlay }) {
     return () => clearInterval(timer);
   }, [featured.length]);
 
+  const item = featured[idx];
   if (!item) return null;
 
   return (
@@ -83,40 +98,23 @@ function BFHeroSlider({ series, onPlay }) {
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
       <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent" />
-      <div className="absolute top-3 left-4">
-        <span className="bg-gold/90 text-black text-xs font-black px-2 py-1 rounded-badge">🇧🇫 {t("series_bf")}</span>
-      </div>
       <div className="absolute bottom-0 left-0 p-5 md:p-8 max-w-lg">
-        <p className="text-white/60 text-sm mb-1">{item.genre} · {item.year} · {item.total_seasons} saison(s)</p>
+        <p className="text-white/60 text-sm mb-1">{item.genre} · {item.total_seasons} saison(s)</p>
         <h2 className="text-2xl md:text-3xl font-black mb-2">{item.title}</h2>
         <p className="text-white/60 text-sm mb-4 line-clamp-2 hidden md:block">{item.description}</p>
-        <button onClick={() => onPlay(item)} className="btn-primary flex items-center gap-2">
+        <button onClick={() => onOpen(item)} className="btn-primary flex items-center gap-2">
           <MdPlayArrow className="text-xl" /> {t("btn_regarder")}
         </button>
       </div>
-      {featured.length > 1 && (
-        <>
-          <button onClick={() => setIdx((i) => (i - 1 + featured.length) % featured.length)} className="absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/80">
-            <MdNavigateBefore className="text-xl" />
-          </button>
-          <button onClick={() => setIdx((i) => (i + 1) % featured.length)} className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-black/50 flex items-center justify-center hover:bg-black/80">
-            <MdNavigateNext className="text-xl" />
-          </button>
-          <div className="absolute bottom-4 right-4 flex gap-1">
-            {featured.map((_, i) => (
-              <button key={i} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full transition-all ${i === idx ? "bg-gold w-4" : "bg-white/30"}`} />
-            ))}
-          </div>
-        </>
-      )}
     </div>
   );
 }
 
-// ─── Series Modal Player ──────────────────────────────────────────────────────
+// ─── Series Info Modal ────────────────────────────────────────────────────────
 
 function SeriesModal({ series, onClose }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const [fav, setFav] = useState(isFavorite(series.id, "series"));
 
   useEffect(() => {
@@ -133,54 +131,59 @@ function SeriesModal({ series, onClose }) {
   };
 
   const shareWA = () => {
-    const text = encodeURIComponent(`📺 ${series.title} (${series.year}) — à voir sur FASO TV\n${series.description || ""}`);
+    const text = encodeURIComponent(`📺 ${series.title} — à voir sur FASO TV\n${series.description || ""}`);
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };
 
   return (
     <div className="fixed inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-4" onClick={onClose}>
-      <div className="w-full max-w-4xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h2 className="font-black text-xl">{series.title}</h2>
-            <p className="text-white/50 text-sm">{series.genre} · {series.year} · {series.total_seasons} saison(s) · {series.total_episodes} épisode(s)</p>
+      <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-4">
+          {series.poster_url && (
+            <img
+              src={series.poster_url}
+              alt={series.title}
+              className="w-28 rounded-card object-cover flex-shrink-0"
+              onError={(e) => { e.target.style.display = "none"; }}
+            />
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <h2 className="font-black text-xl leading-tight">{series.title}</h2>
+              <button onClick={onClose} className="text-white/40 hover:text-white p-1 flex-shrink-0">
+                <MdClose className="text-xl" />
+              </button>
+            </div>
+            <p className="text-white/50 text-sm mb-3">
+              {series.genre} · {series.total_seasons} saison(s)
+              {series.rating && <span> · ⭐ {series.rating}</span>}
+            </p>
+            {series.description && (
+              <p className="text-white/60 text-sm leading-relaxed line-clamp-4 mb-4">{series.description}</p>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => navigate(`/series/${series.id}`)}
+                className="btn-primary flex items-center gap-1.5 text-sm"
+              >
+                <MdPlayArrow className="text-lg" /> Voir les épisodes
+              </button>
+              <button
+                onClick={toggleFav}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-sm transition-all ${fav ? "bg-live/20 text-live border border-live/30" : "border border-border text-white/60 hover:border-live/30 hover:text-live"}`}
+              >
+                {fav ? <MdFavorite /> : <MdFavoriteBorder />}
+                {fav ? "Favori ✓" : "Ajouter"}
+              </button>
+              <button
+                onClick={shareWA}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-sm border border-border text-white/60 hover:border-green-500/30 hover:text-green-400 transition-colors"
+              >
+                <MdWhatsapp /> {t("btn_whatsapp")}
+              </button>
+            </div>
           </div>
-          <button onClick={onClose} className="text-white/40 hover:text-white p-2"><MdClose className="text-2xl" /></button>
         </div>
-        <div className="relative w-full aspect-video bg-black rounded-card overflow-hidden">
-          <video
-            src={series.stream_url}
-            controls
-            autoPlay
-            className="w-full h-full"
-            onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-          />
-          <div className="hidden absolute inset-0 flex-col items-center justify-center text-white/40">
-            <MdVideoLibrary className="text-5xl mb-3" />
-            <p>Flux vidéo non disponible en démo</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mt-4">
-          <button
-            onClick={toggleFav}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-sm transition-all ${fav ? "bg-live/20 text-live border border-live/30" : "border border-border text-white/60 hover:border-live/30 hover:text-live"}`}
-          >
-            {fav ? <MdFavorite /> : <MdFavoriteBorder />}
-            {fav ? "Favori ✓" : "Ajouter favori"}
-          </button>
-          <button
-            onClick={shareWA}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-btn text-sm border border-border text-white/60 hover:border-green-500/30 hover:text-green-400 transition-colors"
-          >
-            <MdWhatsapp /> {t("btn_whatsapp")}
-          </button>
-        </div>
-        {series.description && (
-          <p className="text-white/60 text-sm mt-3 leading-relaxed">{series.description}</p>
-        )}
-        {series.is_burkinabe && series.description_en && (
-          <p className="text-white/30 text-xs mt-1 leading-relaxed italic">🇬🇧 {series.description_en}</p>
-        )}
       </div>
     </div>
   );
@@ -190,74 +193,85 @@ function SeriesModal({ series, onClose }) {
 
 export default function SeriesPage() {
   const { t } = useTranslation();
-  const [allSeries, setAllSeries] = useState([]);
-  const [catKey, setCatKey] = useState("series_tous");
-  const [search, setSearch] = useState("");
-  const [playing, setPlaying] = useState(null);
+  const [series, setSeries] = useState([]);
   const [page, setPage] = useState(1);
-  const PER_PAGE = 12;
-  const navigate = useNavigate();
+  const [hasMore, setHasMore] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [selected, setSelected] = useState(null);
+  const loaderRef = useRef(null);
 
-  const refresh = useCallback(() => setAllSeries(getSeries()), []);
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const catFilter = CAT_KEYS[catKey];
-  const filtered = allSeries.filter((s) => {
-    const matchCat = catFilter === null || s.category === catFilter;
-    const matchSearch = !search || [s.title, s.genre, s.category].some((v) => v?.toLowerCase().includes(search.toLowerCase()));
-    return matchCat && matchSearch;
-  });
+  useEffect(() => {
+    setSeries([]);
+    setPage(1);
+    setHasMore(false);
+  }, [debouncedSearch]);
 
-  const paged = filtered.slice(0, page * PER_PAGE);
-  const hasMore = paged.length < filtered.length;
-  const bfSeries = allSeries.filter((s) => s.is_burkinabe);
+  useEffect(() => {
+    let cancelled = false;
+    if (page === 1) setLoading(true);
+    else setLoadingMore(true);
+
+    const params = { page };
+    if (debouncedSearch) params.search = debouncedSearch;
+
+    api.get("/vod/series/", { params }).then((r) => {
+      if (cancelled) return;
+      const results = r.data.results || [];
+      setSeries((prev) => (page === 1 ? results : [...prev, ...results]));
+      setHasMore(!!r.data.next);
+    }).catch(() => {}).finally(() => {
+      if (!cancelled) { setLoading(false); setLoadingMore(false); }
+    });
+
+    return () => { cancelled = true; };
+  }, [page, debouncedSearch]);
+
+  useEffect(() => {
+    if (!loaderRef.current) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting && hasMore && !loadingMore) setPage((p) => p + 1); },
+      { threshold: 0.1 }
+    );
+    obs.observe(loaderRef.current);
+    return () => obs.disconnect();
+  }, [hasMore, loadingMore]);
 
   return (
     <div className="animate-fade-in">
-      {playing && <SeriesModal series={playing} onClose={() => setPlaying(null)} />}
+      {selected && <SeriesModal series={selected} onClose={() => setSelected(null)} />}
 
       <div className="p-4 md:p-6 space-y-5">
-        {/* BF Hero */}
-        {(catKey === "series_tous" || catKey === "series_bf") && !search && (
-          <BFHeroSlider series={bfSeries} onPlay={setPlaying} />
-        )}
+        {!search && <FeaturedHero onOpen={setSelected} />}
 
-        {/* Header */}
         <div className="flex items-center gap-3">
           <MdVideoLibrary className="text-gold text-2xl" />
           <h1 className="text-2xl font-bold">{t("series_title")}</h1>
-          <span className="ml-auto text-white/40 text-sm">{filtered.length} séries</span>
         </div>
 
-        {/* Category tabs */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          {CATEGORIES.map((key) => (
-            <button
-              key={key}
-              onClick={() => { setCatKey(key); setPage(1); }}
-              className={`flex-shrink-0 px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                catKey === key ? "bg-gold text-black font-bold" : "bg-card text-white/60 hover:text-white"
-              }`}
-            >
-              {t(key)}
-            </button>
-          ))}
-        </div>
-
-        {/* Search */}
         <div className="relative">
           <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-lg" />
           <input
             type="search"
             placeholder={t("series_search")}
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => setSearch(e.target.value)}
             className="input pl-10"
           />
         </div>
 
-        {/* Grid */}
-        {paged.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
+          </div>
+        ) : series.length === 0 ? (
           <div className="text-center py-16 text-white/30">
             <MdVideoLibrary className="text-5xl mx-auto mb-3 opacity-30" />
             <p>{t("series_empty")}</p>
@@ -265,17 +279,15 @@ export default function SeriesPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {paged.map((s) => (
-                <SeriesCard key={s.id} series={s} onClick={() => { if (s.is_burkinabe) setPlaying(s); else navigate(`/series/${s.id}`); }} />
+              {series.map((s) => (
+                <SeriesCard key={s.id} series={s} onClick={() => setSelected(s)} />
               ))}
             </div>
-            {hasMore && (
-              <div className="text-center mt-4">
-                <button onClick={() => setPage((p) => p + 1)} className="btn-outline px-8">
-                  {t("btn_charger_plus")}
-                </button>
-              </div>
-            )}
+            <div ref={loaderRef} className="py-4 flex justify-center">
+              {loadingMore && (
+                <div className="w-6 h-6 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
+              )}
+            </div>
           </>
         )}
       </div>

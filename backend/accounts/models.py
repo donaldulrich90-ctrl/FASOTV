@@ -43,6 +43,12 @@ class User(AbstractBaseUser, PermissionsMixin):
     plan_actif = models.CharField(max_length=100, blank=True)
     date_expiration = models.DateTimeField(null=True, blank=True)
 
+    # Parental control / adult PIN
+    adult_pin_hash = models.CharField(max_length=128, blank=True)
+    adult_enabled = models.BooleanField(default=False)
+    pin_failed_count = models.IntegerField(default=0)
+    pin_locked_until = models.DateTimeField(null=True, blank=True)
+
     objects = UserManager()
 
     USERNAME_FIELD = "phone"

@@ -1,13 +1,17 @@
 import { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useAdultPin } from "../context/AdultPinContext";
 import { isAdmin } from "../utils/store";
 import useTranslation from "../hooks/useTranslation";
+import api from "../services/api";
+import PinPad from "./PinPad";
 import {
   MdHome, MdLiveTv, MdMusicNote, MdVpnKey, MdStar,
   MdMenu, MdClose, MdMovie, MdVideoLibrary, MdSearch,
   MdMonetizationOn, MdSettings, MdLogout, MdCampaign,
-  MdAdminPanelSettings, MdLanguage,
+  MdAdminPanelSettings, MdLanguage, MdRadio,
+  MdLock, MdLockOpen, MdShield,
 } from "react-icons/md";
 
 const LANGS = [
@@ -28,6 +32,7 @@ const MAIN_NAV = [
 const MORE_NAV = [
   { to: "/movies", icon: MdMovie, key: "nav_movies" },
   { to: "/series", icon: MdVideoLibrary, key: "nav_series" },
+  { to: "/radio", icon: MdRadio, key: "nav_radio" },
   { to: "/search", icon: MdSearch, key: "nav_search" },
   { to: "/promote", icon: MdCampaign, key: "promo_title" },
   { to: "/reseller", icon: MdMonetizationOn, key: "nav_reseller" },
@@ -38,12 +43,34 @@ export default function MobileNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [pendingLang, setPendingLang] = useState(null);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState("");
+  const [pinBusy, setPinBusy] = useState(false);
   const { user, logout } = useAuth();
+  const { isUnlocked, unlock, lock } = useAdultPin();
   const navigate = useNavigate();
   const { t, lang, changeLang } = useTranslation();
   const admin = isAdmin(user);
+  const adultEnabled = user?.adult_enabled;
 
   const handleLogout = () => { logout(); navigate("/login"); setMenuOpen(false); };
+
+  const handlePinSubmit = async (pin) => {
+    setPinBusy(true);
+    setPinError("");
+    try {
+      await api.post("/accounts/adult-pin/verify/", { pin });
+      unlock();
+      setPinOpen(false);
+    } catch (e) {
+      const data = e.response?.data;
+      if (data?.code === "locked") {
+        setPinError(t("parental_pin_locked").replace("{n}", data.wait_minutes ?? 15));
+      } else {
+        setPinError(t("parental_pin_wrong").replace("{n}", data?.attempts_remaining ?? "?"));
+      }
+    } finally { setPinBusy(false); }
+  };
 
   const requestLangChange = (code) => {
     if (code === lang) { setLangOpen(false); return; }
@@ -78,6 +105,25 @@ export default function MobileNav() {
               <span>{t(key)}</span>
             </NavLink>
           ))}
+          {adultEnabled && (
+            isUnlocked ? (
+              <button
+                onClick={lock}
+                className="flex-1 flex flex-col items-center gap-1 py-2.5 text-xs text-live/70"
+              >
+                <MdLockOpen className="text-xl" />
+                <span className="truncate">{t("parental_lock_now")}</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => { setPinError(""); setPinOpen(true); }}
+                className="flex-1 flex flex-col items-center gap-1 py-2.5 text-xs text-gold/70"
+              >
+                <MdShield className="text-xl" />
+                <span className="truncate">{t("parental_unlock")}</span>
+              </button>
+            )
+          )}
           <button
             onClick={() => setMenuOpen(true)}
             className="flex-1 flex flex-col items-center gap-1 py-2.5 text-xs text-white/50"
@@ -121,6 +167,29 @@ export default function MobileNav() {
               </NavLink>
             )}
 
+            {/* Adult content */}
+            {adultEnabled && (
+              <div className="border-t border-border pt-2 mt-1">
+                {isUnlocked ? (
+                  <button
+                    onClick={() => { lock(); setMenuOpen(false); }}
+                    className="sidebar-link w-full text-left text-live/70 hover:text-live"
+                  >
+                    <MdLockOpen className="text-xl flex-shrink-0" />
+                    <span className="text-sm font-medium">{t("parental_lock_now")}</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setPinError(""); setPinOpen(true); setMenuOpen(false); }}
+                    className="sidebar-link w-full text-left text-gold/80 hover:text-gold"
+                  >
+                    <MdShield className="text-xl flex-shrink-0" />
+                    <span className="text-sm font-medium">{t("parental_unlock")}</span>
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Language selector */}
             <div className="border-t border-border pt-2 mt-1">
               <button
@@ -152,6 +221,22 @@ export default function MobileNav() {
               <MdLogout className="text-xl flex-shrink-0" />
               <span className="text-sm font-medium">{t("nav_logout")}</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* PIN unlock modal */}
+      {pinOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setPinOpen(false)} />
+          <div className="relative bg-surface border border-border rounded-card shadow-2xl p-6 w-full max-w-sm">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-lg font-bold">{t("parental_pin_enter")}</h3>
+              <button onClick={() => setPinOpen(false)} className="text-white/40 hover:text-white">
+                <MdClose className="text-xl" />
+              </button>
+            </div>
+            <PinPad onComplete={handlePinSubmit} disabled={pinBusy} error={pinError} />
           </div>
         </div>
       )}

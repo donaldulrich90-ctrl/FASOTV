@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 
+from accounts.helpers import adult_allowed
 from .models import Movie, Series, Favorite, WatchHistory
 from .serializers import (
     MovieSerializer, MovieListSerializer,
@@ -34,13 +35,21 @@ class MovieListView(generics.ListAPIView):
     ordering_fields = ("rating", "year", "title", "created_at")
 
     def get_queryset(self):
-        return Movie.objects.filter(is_active=True)
+        qs = Movie.objects.filter(is_active=True)
+        if not adult_allowed(self.request):
+            qs = qs.filter(is_adult=False)
+        return qs
 
 
 class MovieDetailView(generics.RetrieveAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = MovieSerializer
-    queryset = Movie.objects.filter(is_active=True)
+
+    def get_queryset(self):
+        qs = Movie.objects.filter(is_active=True)
+        if not adult_allowed(self.request):
+            qs = qs.filter(is_adult=False)
+        return qs
 
 
 class SeriesListView(generics.ListAPIView):
@@ -52,13 +61,21 @@ class SeriesListView(generics.ListAPIView):
     ordering_fields = ("rating", "title", "created_at")
 
     def get_queryset(self):
-        return Series.objects.filter(is_active=True)
+        qs = Series.objects.filter(is_active=True)
+        if not adult_allowed(self.request):
+            qs = qs.filter(is_adult=False)
+        return qs
 
 
 class SeriesDetailView(generics.RetrieveAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = SeriesSerializer
-    queryset = Series.objects.prefetch_related("seasons__episodes").filter(is_active=True)
+
+    def get_queryset(self):
+        qs = Series.objects.prefetch_related("seasons__episodes").filter(is_active=True)
+        if not adult_allowed(self.request):
+            qs = qs.filter(is_adult=False)
+        return qs
 
 
 class FavoriteListView(generics.ListAPIView):
@@ -131,12 +148,19 @@ class GlobalSearchView(APIView):
         from channels.models import Channel
         from channels.serializers import ChannelListSerializer
 
-        channels = Channel.objects.filter(is_active=True, name__icontains=q)[:5]
-        movies = Movie.objects.filter(is_active=True, title__icontains=q)[:5]
-        series = Series.objects.filter(is_active=True, title__icontains=q)[:5]
+        show_adult = adult_allowed(request)
+
+        channels_qs = Channel.objects.filter(is_active=True, name__icontains=q)
+        movies_qs = Movie.objects.filter(is_active=True, title__icontains=q)
+        series_qs = Series.objects.filter(is_active=True, title__icontains=q)
+
+        if not show_adult:
+            channels_qs = channels_qs.filter(is_adult=False)
+            movies_qs = movies_qs.filter(is_adult=False)
+            series_qs = series_qs.filter(is_adult=False)
 
         return Response({
-            "channels": ChannelListSerializer(channels, many=True).data,
-            "movies": MovieListSerializer(movies, many=True).data,
-            "series": SeriesListSerializer(series, many=True).data,
+            "channels": ChannelListSerializer(channels_qs[:5], many=True).data,
+            "movies": MovieListSerializer(movies_qs[:5], many=True).data,
+            "series": SeriesListSerializer(series_qs[:5], many=True).data,
         })
