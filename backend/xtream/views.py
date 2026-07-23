@@ -1,6 +1,6 @@
 import logging
 import requests as http_requests
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 from django.conf import settings
 from django.http import StreamingHttpResponse, HttpResponse
 from django.utils.text import slugify
@@ -41,21 +41,31 @@ def _proxy_url(segment_url: str) -> str:
     return f"/api/xtream/proxy-url/?url={quote(segment_url, safe='')}"
 
 
-def _rewrite_playlist(content: str, base_url: str) -> str:
+def _rewrite_playlist(content: str, final_url: str) -> str:
     """Rewrite all segment/sub-playlist lines to go through proxy-url.
 
-    base_url is the directory URL (with trailing slash) resolved after
-    following all redirects — typically an IP-direct URL that bypasses
-    Cloudflare (e.g. http://185.245.1.97/live/user/pass/).
+    final_url is resp.url after following all redirects — an IP-direct URL
+    like http://185.202.100.151:80/live/play/TOKEN/STREAM_ID that bypasses
+    Cloudflare.  Three cases for segment lines:
+      - 'http…'  → absolute URL, use as-is
+      - '/…'     → absolute path on the real host (e.g. /hls/hash/seg.ts)
+                   → prepend scheme://host only
+      - else     → relative path → prepend directory of final_url
     """
+    parsed = urlparse(final_url)
+    real_host = f"{parsed.scheme}://{parsed.netloc}"
+    dir_url = final_url.rsplit("/", 1)[0] + "/"
+
     lines = []
     for line in content.splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("#"):
             if stripped.startswith("http"):
                 segment_url = stripped
+            elif stripped.startswith("/"):
+                segment_url = real_host + stripped
             else:
-                segment_url = base_url + stripped
+                segment_url = dir_url + stripped
             lines.append(_proxy_url(segment_url))
         else:
             lines.append(line)
@@ -197,12 +207,11 @@ class XtreamStreamProxyView(APIView):
                 timeout=30,
                 allow_redirects=True,
             )
-            # resp.url is the URL after all redirects — typically an IP-direct
-            # URL that does NOT route through Cloudflare (e.g. http://185.x.x.x/…)
-            real_base = resp.url.rsplit("/", 1)[0] + "/"
-            logger.debug("m3u8 resolved: %s → base %s", m3u8_url, real_base)
+            # resp.url is the final URL after all redirects — an IP-direct URL
+            # like http://185.202.100.151:80/live/play/TOKEN/STREAM_ID
+            logger.debug("m3u8 resolved: %s → %s", m3u8_url, resp.url)
 
-            content = _rewrite_playlist(resp.text, real_base)
+            content = _rewrite_playlist(resp.text, resp.url)
 
             response = HttpResponse(content, content_type="application/vnd.apple.mpegurl")
             response["Cache-Control"] = "no-cache"
@@ -235,8 +244,7 @@ class XtreamSegmentProxyView(APIView):
             content_type = resp.headers.get("Content-Type", "video/mp2t")
 
             if "mpegurl" in content_type or path.endswith(".m3u8"):
-                real_base = resp.url.rsplit("/", 1)[0] + "/"
-                content = _rewrite_playlist(resp.text, real_base)
+                content = _rewrite_playlist(resp.text, resp.url)
                 response = HttpResponse(content, content_type="application/vnd.apple.mpegurl")
                 response["Cache-Control"] = "no-cache"
                 response["Access-Control-Allow-Origin"] = "*"
@@ -275,9 +283,8 @@ class XtreamURLProxyView(APIView):
             content_type = resp.headers.get("Content-Type", "video/mp2t")
 
             if "mpegurl" in content_type or url.endswith(".m3u8"):
-                # Sub-playlist: follow the redirect chain and rewrite its URLs too
-                real_base = resp.url.rsplit("/", 1)[0] + "/"
-                content = _rewrite_playlist(resp.text, real_base)
+                # Sub-playlist: rewrite URLs using the post-redirect real IP URL
+                content = _rewrite_playlist(resp.text, resp.url)
                 response = HttpResponse(content, content_type="application/vnd.apple.mpegurl")
                 response["Cache-Control"] = "no-cache"
             else:
