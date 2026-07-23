@@ -1,5 +1,6 @@
 import logging
 import requests as http_requests
+from urllib.parse import quote
 from django.conf import settings
 from django.http import StreamingHttpResponse, HttpResponse
 from django.utils.text import slugify
@@ -35,26 +36,27 @@ def _get_server():
     )
 
 
-def _rewrite_m3u8(content: str, server_url: str, username: str, password: str) -> str:
-    """Replace Xtream stream URLs in a playlist with our proxy URLs."""
-    base = f"{server_url}/live/{username}/{password}/"
+def _proxy_url(segment_url: str) -> str:
+    """Return the proxy-url path for a segment URL."""
+    return f"/api/xtream/proxy-url/?url={quote(segment_url, safe='')}"
+
+
+def _rewrite_playlist(content: str, base_url: str) -> str:
+    """Rewrite all segment/sub-playlist lines to go through proxy-url.
+
+    base_url is the directory URL (with trailing slash) resolved after
+    following all redirects — typically an IP-direct URL that bypasses
+    Cloudflare (e.g. http://185.245.1.97/live/user/pass/).
+    """
     lines = []
     for line in content.splitlines():
         stripped = line.strip()
         if stripped and not stripped.startswith("#"):
-            if stripped.startswith(base):
-                # Absolute URL that starts with our base — extract tail
-                tail = stripped[len(base):]
-                lines.append(f"/api/xtream/proxy-segment/{tail}")
-            elif stripped.startswith("http"):
-                # Absolute URL from a different host
-                lines.append(f"/api/xtream/proxy-url/?url={stripped}")
-            elif stripped.startswith("/api/"):
-                # Already rewritten
-                lines.append(stripped)
+            if stripped.startswith("http"):
+                segment_url = stripped
             else:
-                # Relative segment or sub-playlist
-                lines.append(f"/api/xtream/proxy-segment/{stripped}")
+                segment_url = base_url + stripped
+            lines.append(_proxy_url(segment_url))
         else:
             lines.append(line)
     return "\n".join(lines)
@@ -177,7 +179,9 @@ class XtreamSyncView(APIView):
 # ── Unauthenticated proxy views (called by HLS.js / Smart TV) ────────────────
 
 class XtreamStreamProxyView(APIView):
-    """Fetches and rewrites the m3u8 playlist for a live stream."""
+    """Fetches m3u8 playlist, follows redirects to get the real IP-direct URL,
+    then rewrites all segment lines through /api/xtream/proxy-url/ so that
+    subsequent segment requests bypass Cloudflare entirely."""
     permission_classes = []
 
     def get(self, request, stream_id):
@@ -185,11 +189,21 @@ class XtreamStreamProxyView(APIView):
         if not server_url:
             return HttpResponse("No Xtream server configured", status=404)
 
-        url = f"{server_url}/live/{username}/{password}/{stream_id}.m3u8"
+        m3u8_url = f"{server_url}/live/{username}/{password}/{stream_id}.m3u8"
         try:
-            resp = http_requests.get(url, headers=XTREAM_HEADERS, timeout=30)
-            resp.raise_for_status()
-            content = _rewrite_m3u8(resp.text, server_url, username, password)
+            resp = http_requests.get(
+                m3u8_url,
+                headers=XTREAM_HEADERS,
+                timeout=30,
+                allow_redirects=True,
+            )
+            # resp.url is the URL after all redirects — typically an IP-direct
+            # URL that does NOT route through Cloudflare (e.g. http://185.x.x.x/…)
+            real_base = resp.url.rsplit("/", 1)[0] + "/"
+            logger.debug("m3u8 resolved: %s → base %s", m3u8_url, real_base)
+
+            content = _rewrite_playlist(resp.text, real_base)
+
             response = HttpResponse(content, content_type="application/vnd.apple.mpegurl")
             response["Cache-Control"] = "no-cache"
             response["Access-Control-Allow-Origin"] = "*"
@@ -200,7 +214,8 @@ class XtreamStreamProxyView(APIView):
 
 
 class XtreamSegmentProxyView(APIView):
-    """Streams .ts segments and sub-playlists through the proxy."""
+    """Fallback segment proxy (path-based). Used only if proxy-url is unavailable.
+    Note: may still hit Cloudflare if the server_url is a CF-proxied domain."""
     permission_classes = []
 
     def get(self, request, path):
@@ -210,12 +225,18 @@ class XtreamSegmentProxyView(APIView):
 
         url = f"{server_url}/live/{username}/{password}/{path}"
         try:
-            resp = http_requests.get(url, headers=XTREAM_HEADERS, stream=True, timeout=30)
-            resp.raise_for_status()
+            resp = http_requests.get(
+                url,
+                headers=XTREAM_HEADERS,
+                stream=True,
+                timeout=30,
+                allow_redirects=True,
+            )
             content_type = resp.headers.get("Content-Type", "video/mp2t")
 
             if "mpegurl" in content_type or path.endswith(".m3u8"):
-                content = _rewrite_m3u8(resp.text, server_url, username, password)
+                real_base = resp.url.rsplit("/", 1)[0] + "/"
+                content = _rewrite_playlist(resp.text, real_base)
                 response = HttpResponse(content, content_type="application/vnd.apple.mpegurl")
                 response["Cache-Control"] = "no-cache"
                 response["Access-Control-Allow-Origin"] = "*"
@@ -234,7 +255,8 @@ class XtreamSegmentProxyView(APIView):
 
 
 class XtreamURLProxyView(APIView):
-    """Generic proxy for absolute segment URLs (CDN redirects, etc.)."""
+    """Main segment proxy: fetches any URL (IP-direct or otherwise) and streams
+    it back. Handles both binary .ts segments and sub-playlists."""
     permission_classes = []
 
     def get(self, request):
@@ -243,20 +265,31 @@ class XtreamURLProxyView(APIView):
             return HttpResponse("Missing or invalid url", status=400)
 
         try:
-            resp = http_requests.get(url, headers=XTREAM_HEADERS, stream=True, timeout=30)
-            resp.raise_for_status()
+            resp = http_requests.get(
+                url,
+                headers=XTREAM_HEADERS,
+                stream=True,
+                timeout=30,
+                allow_redirects=True,
+            )
             content_type = resp.headers.get("Content-Type", "video/mp2t")
 
             if "mpegurl" in content_type or url.endswith(".m3u8"):
-                response = HttpResponse(resp.text, content_type="application/vnd.apple.mpegurl")
+                # Sub-playlist: follow the redirect chain and rewrite its URLs too
+                real_base = resp.url.rsplit("/", 1)[0] + "/"
+                content = _rewrite_playlist(resp.text, real_base)
+                response = HttpResponse(content, content_type="application/vnd.apple.mpegurl")
                 response["Cache-Control"] = "no-cache"
             else:
+                # Binary segment (.ts) — stream in chunks, no raise_for_status
                 def _stream():
                     for chunk in resp.iter_content(chunk_size=65536):
                         yield chunk
+
                 response = StreamingHttpResponse(_stream(), content_type=content_type)
 
             response["Access-Control-Allow-Origin"] = "*"
+            response["Access-Control-Allow-Methods"] = "GET, OPTIONS"
             return response
         except Exception as exc:
             logger.warning("Proxy URL error url=%s: %s", url, exc)
