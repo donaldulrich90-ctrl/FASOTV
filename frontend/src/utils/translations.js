@@ -1059,6 +1059,12 @@ const translations = {
     mo: "Bũmb fãa na tekame",
     di: "Bɛɛ bɛ changeli"
   },
+  pwa_install: {
+    fr: "📲 Installer FASO TV",
+    en: "📲 Install FASO TV",
+    mo: "📲 Sik-y FASO TV",
+    di: "📲 FASO TV bila"
+  },
 
   // ══════════════════════════════════════
   // PARAMÈTRES & SONS
