@@ -18,11 +18,17 @@ class Movie(models.Model):
     is_adult = models.BooleanField(default=False, db_index=True, help_text="Contenu adulte — masqué sans PIN")
     xtream_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    added_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    lang_code = models.CharField(max_length=10, blank=True, db_index=True)
+    genre_slug = models.CharField(max_length=60, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
         verbose_name = "Film"
         verbose_name_plural = "Films"
+        indexes = [
+            models.Index(fields=["lang_code", "genre_slug"], name="movie_lang_genre_idx"),
+        ]
 
     def __str__(self):
         return self.title
@@ -40,11 +46,17 @@ class Series(models.Model):
     is_adult = models.BooleanField(default=False, db_index=True, help_text="Contenu adulte — masqué sans PIN")
     xtream_id = models.PositiveIntegerField(null=True, blank=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    release_year = models.IntegerField(null=True, blank=True, db_index=True)
+    lang_code = models.CharField(max_length=10, blank=True, db_index=True)
+    genre_slug = models.CharField(max_length=60, blank=True, db_index=True)
 
     class Meta:
         ordering = ["-created_at"]
         verbose_name = "Série"
         verbose_name_plural = "Séries"
+        indexes = [
+            models.Index(fields=["lang_code", "genre_slug"], name="series_lang_genre_idx"),
+        ]
 
     def __str__(self):
         return self.title

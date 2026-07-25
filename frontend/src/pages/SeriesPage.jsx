@@ -2,11 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { isFavorite, addFavorite, removeFavorite } from "../utils/store";
 import useTranslation from "../hooks/useTranslation";
+import { useLanguages, useGenres } from "../hooks/useCatalog";
 import api from "../services/api";
 import {
   MdSearch, MdVideoLibrary, MdStar, MdPlayArrow, MdClose,
   MdFavorite, MdFavoriteBorder, MdWhatsapp,
 } from "react-icons/md";
+
+const SORT_OPTIONS = ["recent", "year", "alpha", "rating"];
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
@@ -46,7 +49,7 @@ function SeriesCard({ series, onClick }) {
         </div>
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
           <p className="text-xs text-white/60">
-            {series.total_seasons} {t("series_saisons")}
+            {series.total_seasons} {t("series_seasons")}
           </p>
         </div>
         {series.rating && (
@@ -61,7 +64,7 @@ function SeriesCard({ series, onClick }) {
         )}
       </div>
       <p className="text-sm font-medium mt-2 truncate group-hover:text-gold transition-colors">{series.title}</p>
-      <p className="text-xs text-white/40">{series.genre}</p>
+      <p className="text-xs text-white/40 truncate">{series.genre}</p>
     </button>
   );
 }
@@ -189,50 +192,94 @@ function SeriesModal({ series, onClose }) {
   );
 }
 
+// ─── Pill row ─────────────────────────────────────────────────────────────────
+
+function PillRow({ items, active, onSelect, getKey, getLabel, getCount }) {
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+      <button
+        onClick={() => onSelect(null)}
+        className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+          active === null ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
+        }`}
+      >
+        Tous
+      </button>
+      {items.map((item) => (
+        <button
+          key={getKey(item)}
+          onClick={() => onSelect(getKey(item) === active ? null : getKey(item))}
+          className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+            getKey(item) === active ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
+          }`}
+        >
+          {getLabel(item)}
+          {getCount && <span className="ml-1 text-xs opacity-60">({getCount(item)})</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SeriesPage() {
   const { t } = useTranslation();
-  const [series, setSeries] = useState([]);
+  const [seriesList, setSeriesList] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [activeLang, setActiveLang] = useState(null);
+  const [activeGenre, setActiveGenre] = useState(null);
+  const [sort, setSort] = useState("recent");
   const [selected, setSelected] = useState(null);
   const loaderRef = useRef(null);
 
+  const { languages } = useLanguages("series");
+  const { genres } = useGenres("series", activeLang);
+
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
   }, [search]);
 
   useEffect(() => {
-    setSeries([]);
+    setSeriesList([]);
     setPage(1);
     setHasMore(false);
-  }, [debouncedSearch]);
+    setActiveGenre(null);
+  }, [activeLang]);
+
+  useEffect(() => {
+    setSeriesList([]);
+    setPage(1);
+    setHasMore(false);
+  }, [debouncedSearch, activeGenre, sort]);
 
   useEffect(() => {
     let cancelled = false;
     if (page === 1) setLoading(true);
     else setLoadingMore(true);
 
-    const params = { page };
+    const params = { page, sort };
     if (debouncedSearch) params.search = debouncedSearch;
+    if (activeLang) params.lang = activeLang;
+    if (activeGenre) params.genre = activeGenre;
 
     api.get("/vod/series/", { params }).then((r) => {
       if (cancelled) return;
       const results = r.data.results || [];
-      setSeries((prev) => (page === 1 ? results : [...prev, ...results]));
+      setSeriesList((prev) => (page === 1 ? results : [...prev, ...results]));
       setHasMore(!!r.data.next);
     }).catch(() => {}).finally(() => {
       if (!cancelled) { setLoading(false); setLoadingMore(false); }
     });
 
     return () => { cancelled = true; };
-  }, [page, debouncedSearch]);
+  }, [page, debouncedSearch, activeLang, activeGenre, sort]);
 
   useEffect(() => {
     if (!loaderRef.current) return;
@@ -244,34 +291,90 @@ export default function SeriesPage() {
     return () => obs.disconnect();
   }, [hasMore, loadingMore]);
 
+  const resetFilters = () => {
+    setSearch("");
+    setActiveLang(null);
+    setActiveGenre(null);
+    setSort("recent");
+  };
+
+  const hasFilters = search || activeLang || activeGenre || sort !== "recent";
+
   return (
     <div className="animate-fade-in">
       {selected && <SeriesModal series={selected} onClose={() => setSelected(null)} />}
 
-      <div className="p-4 md:p-6 space-y-5">
-        {!search && <FeaturedHero onOpen={setSelected} />}
+      <div className="p-4 md:p-6 space-y-4">
+        {!search && !activeLang && !activeGenre && <FeaturedHero onOpen={setSelected} />}
 
         <div className="flex items-center gap-3">
           <MdVideoLibrary className="text-gold text-2xl" />
           <h1 className="text-2xl font-bold">{t("series_title")}</h1>
         </div>
 
-        <div className="relative">
-          <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-lg" />
-          <input
-            type="search"
-            placeholder={t("series_search")}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="input pl-10"
-          />
+        {/* Sort bar */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          {SORT_OPTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSort(s)}
+              className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+                sort === s ? "bg-gold/20 text-gold border border-gold/30 font-semibold" : "text-white/50 hover:text-white"
+              }`}
+            >
+              {t(`sort_${s}`)}
+            </button>
+          ))}
         </div>
+
+        {/* Search */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-lg" />
+            <input
+              type="search"
+              placeholder={t("series_search")}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="input pl-10"
+            />
+          </div>
+          {hasFilters && (
+            <button onClick={resetFilters} className="btn-outline flex items-center gap-1 text-sm px-3">
+              <MdClose className="text-sm" /> {t("filter_reset")}
+            </button>
+          )}
+        </div>
+
+        {/* Language pills */}
+        {languages.length > 0 && (
+          <PillRow
+            items={languages}
+            active={activeLang}
+            onSelect={(code) => { setActiveLang(code); setActiveGenre(null); }}
+            getKey={(l) => l.code}
+            getLabel={(l) => l.label}
+            getCount={(l) => l.count}
+          />
+        )}
+
+        {/* Genre pills */}
+        {genres.length > 0 && (
+          <PillRow
+            items={genres}
+            active={activeGenre}
+            onSelect={setActiveGenre}
+            getKey={(g) => g.slug}
+            getLabel={(g) => g.label}
+            getCount={(g) => g.count}
+          />
+        )}
 
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {Array.from({ length: 10 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
-        ) : series.length === 0 ? (
+        ) : seriesList.length === 0 ? (
           <div className="text-center py-16 text-white/30">
             <MdVideoLibrary className="text-5xl mx-auto mb-3 opacity-30" />
             <p>{t("series_empty")}</p>
@@ -279,13 +382,16 @@ export default function SeriesPage() {
         ) : (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {series.map((s) => (
+              {seriesList.map((s) => (
                 <SeriesCard key={s.id} series={s} onClick={() => setSelected(s)} />
               ))}
             </div>
             <div ref={loaderRef} className="py-4 flex justify-center">
               {loadingMore && (
                 <div className="w-6 h-6 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
+              )}
+              {!hasMore && seriesList.length > 0 && (
+                <p className="text-white/20 text-xs">{t("load_more_end")}</p>
               )}
             </div>
           </>

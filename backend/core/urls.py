@@ -15,4 +15,5 @@ urlpatterns = [
     path("api/xtream/", include("xtream.urls")),
     path("api/m3u/", include("m3u_parser.urls")),
     path("api/resellers/", include("resellers.urls")),
+    path("api/catalog/", include("catalog.urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

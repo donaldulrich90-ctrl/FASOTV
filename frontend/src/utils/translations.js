@@ -1130,6 +1130,20 @@ const translations = {
   parental_session_active: { fr: "Session déverrouillée", en: "Session unlocked", mo: "Sɛsiyõ laafame", di: "Sɛsiyon laɲinnen bɛ" },
   parental_enter_current: { fr: "Entrez votre code actuel", en: "Enter your current PIN", mo: "Ges-y yãmb kood sẽn be masãã", di: "I code kɔnɔna don" },
 
+  // ══════════════════════════════════════
+  // CATALOGUE — navigation lang/genre
+  // ══════════════════════════════════════
+
+  catalog_language: { fr: "Langue", en: "Language", mo: "Goama", di: "Kan" },
+  catalog_genre: { fr: "Genre", en: "Genre", mo: "Tẽod", di: "Sɔgɔ" },
+  sort_recent: { fr: "Nouveautés", en: "New", mo: "Paalse", di: "Kuraw" },
+  sort_year: { fr: "Année", en: "Year", mo: "Yʋʋre", di: "San" },
+  sort_alpha: { fr: "A–Z", en: "A–Z", mo: "A–Z", di: "A–Z" },
+  sort_rating: { fr: "Note", en: "Rating", mo: "Yẽesre", di: "Kisili" },
+  load_more: { fr: "Charger plus", en: "Load more", mo: "Loog-y n paase", di: "A dafa" },
+  load_more_end: { fr: "Fin du catalogue", en: "End of catalog", mo: "Bãngã saame", di: "Bãngan banna" },
+  filter_reset: { fr: "Réinitialiser", en: "Reset", mo: "Pʋɩ-y tãoodo", di: "A labɛn" },
+
 };
 
 // Codes langue supportés (mo = mooré, di = dioula)

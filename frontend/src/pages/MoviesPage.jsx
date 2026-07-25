@@ -1,13 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { isFavorite, addFavorite, removeFavorite } from "../utils/store";
 import useTranslation from "../hooks/useTranslation";
+import { useLanguages, useGenres } from "../hooks/useCatalog";
 import api from "../services/api";
 import {
   MdSearch, MdMovie, MdStar, MdPlayArrow, MdClose,
   MdFavorite, MdFavoriteBorder, MdWhatsapp,
 } from "react-icons/md";
 
-const GENRES = ["Action", "Drame", "Comédie", "Thriller", "Fantastique", "Documentaire", "Animation"];
+const SORT_OPTIONS = ["recent", "year", "alpha", "rating"];
+const QUICK_TABS = [
+  { label: "✨ Nouveautés", params: { sort: "recent" } },
+  { label: "🎬 2026",       params: { year: 2026 } },
+  { label: "🎥 2025",       params: { year: 2025 } },
+  { label: "🌍 Afrique",    params: { lang: "AF" } },
+  { label: "🇳🇬 Nollywood", params: { lang: "AF", genre: "nollywood" } },
+];
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
@@ -59,7 +67,7 @@ function MovieCard({ movie, onClick }) {
       </div>
       <p className="text-sm font-medium mt-2 truncate group-hover:text-gold transition-colors">{movie.title}</p>
       <div className="flex items-center gap-1.5 text-xs text-white/40 mt-0.5">
-        {movie.genre && <span>{movie.genre}</span>}
+        {movie.genre && <span className="truncate max-w-[80px]">{movie.genre}</span>}
         {movie.year && <><span>·</span><span>{movie.year}</span></>}
         {movie.duration && <><span>·</span><span>{movie.duration}min</span></>}
       </div>
@@ -181,6 +189,35 @@ function MovieModal({ movie, onClose }) {
   );
 }
 
+// ─── Pill row ─────────────────────────────────────────────────────────────────
+
+function PillRow({ items, active, onSelect, getKey, getLabel, getCount }) {
+  return (
+    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+      <button
+        onClick={() => onSelect(null)}
+        className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+          active === null ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
+        }`}
+      >
+        Tous
+      </button>
+      {items.map((item) => (
+        <button
+          key={getKey(item)}
+          onClick={() => onSelect(getKey(item) === active ? null : getKey(item))}
+          className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+            getKey(item) === active ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
+          }`}
+        >
+          {getLabel(item)}
+          {getCount && <span className="ml-1 text-xs opacity-60">({getCount(item)})</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function MoviesPage() {
@@ -192,30 +229,37 @@ export default function MoviesPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [genre, setGenre] = useState("");
+  const [activeLang, setActiveLang] = useState(null);
+  const [activeGenre, setActiveGenre] = useState(null);
+  const [activeYear, setActiveYear] = useState(null);
+  const [sort, setSort] = useState("recent");
   const [playing, setPlaying] = useState(null);
   const loaderRef = useRef(null);
 
+  const { languages } = useLanguages("vod");
+  const { genres } = useGenres("vod", activeLang);
+
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
   }, [search]);
 
-  // Reset on filter change
   useEffect(() => {
     setMovies([]);
     setPage(1);
     setHasMore(false);
-  }, [debouncedSearch, genre]);
+  }, [debouncedSearch, activeLang, activeGenre, activeYear, sort]);
 
   useEffect(() => {
     let cancelled = false;
     if (page === 1) setLoading(true);
     else setLoadingMore(true);
 
-    const params = { page };
+    const params = { page, sort };
     if (debouncedSearch) params.search = debouncedSearch;
-    if (genre) params.genre = genre;
+    if (activeLang) params.lang = activeLang;
+    if (activeGenre) params.genre = activeGenre;
+    if (activeYear) params.year = activeYear;
 
     api.get("/vod/movies/", { params }).then((r) => {
       if (cancelled) return;
@@ -227,8 +271,9 @@ export default function MoviesPage() {
     });
 
     return () => { cancelled = true; };
-  }, [page, debouncedSearch, genre]);
+  }, [page, debouncedSearch, activeLang, activeGenre, activeYear, sort]);
 
+  // Infinite scroll
   useEffect(() => {
     if (!loaderRef.current) return;
     const obs = new IntersectionObserver(
@@ -239,20 +284,64 @@ export default function MoviesPage() {
     return () => obs.disconnect();
   }, [hasMore, loadingMore]);
 
+  const resetFilters = () => {
+    setSearch("");
+    setActiveLang(null);
+    setActiveGenre(null);
+    setActiveYear(null);
+    setSort("recent");
+  };
+
+  const hasFilters = search || activeLang || activeGenre || activeYear || sort !== "recent";
+
   return (
     <div className="animate-fade-in">
       {playing && <MovieModal movie={playing} onClose={() => setPlaying(null)} />}
 
-      <div className="p-4 md:p-6 space-y-5">
-        {!search && !genre && <FeaturedHero onPlay={setPlaying} />}
+      <div className="p-4 md:p-6 space-y-4">
+        {!search && !activeLang && !activeGenre && <FeaturedHero onPlay={setPlaying} />}
 
         <div className="flex items-center gap-3">
           <MdMovie className="text-gold text-2xl" />
           <h1 className="text-2xl font-bold">{t("movies_title")}</h1>
         </div>
 
-        {/* Search + Genre */}
-        <div className="flex flex-col sm:flex-row gap-2">
+        {/* Quick tabs */}
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+          {QUICK_TABS.map((tab) => (
+            <button
+              key={tab.label}
+              onClick={() => {
+                setSearch("");
+                setActiveLang(tab.params.lang || null);
+                setActiveGenre(tab.params.genre || null);
+                setActiveYear(tab.params.year || null);
+                if (tab.params.sort) setSort(tab.params.sort);
+              }}
+              className="flex-shrink-0 px-3 py-1.5 rounded-badge text-sm bg-card text-white/60 hover:text-white hover:bg-card/80 transition-all"
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Sort bar */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+          {SORT_OPTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => setSort(s)}
+              className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+                sort === s ? "bg-gold/20 text-gold border border-gold/30 font-semibold" : "text-white/50 hover:text-white"
+              }`}
+            >
+              {t(`sort_${s}`)}
+            </button>
+          ))}
+        </div>
+
+        {/* Search */}
+        <div className="flex gap-2">
           <div className="relative flex-1">
             <MdSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-lg" />
             <input
@@ -263,39 +352,38 @@ export default function MoviesPage() {
               className="input pl-10"
             />
           </div>
-          <select
-            value={genre}
-            onChange={(e) => setGenre(e.target.value)}
-            className="input sm:w-40"
-          >
-            <option value="">{t("movies_genre")}</option>
-            {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
-          {(genre || search) && (
-            <button
-              onClick={() => { setGenre(""); setSearch(""); }}
-              className="btn-outline flex items-center gap-1 text-sm px-3"
-            >
-              <MdClose className="text-sm" /> Réinitialiser
+          {hasFilters && (
+            <button onClick={resetFilters} className="btn-outline flex items-center gap-1 text-sm px-3">
+              <MdClose className="text-sm" /> {t("filter_reset")}
             </button>
           )}
         </div>
 
-        {/* Genre pills */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          {GENRES.map((g) => (
-            <button
-              key={g}
-              onClick={() => setGenre(g === genre ? "" : g)}
-              className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
-                genre === g ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
-              }`}
-            >
-              {g}
-            </button>
-          ))}
-        </div>
+        {/* Language pills (niveau 1) */}
+        {languages.length > 0 && (
+          <PillRow
+            items={languages}
+            active={activeLang}
+            onSelect={(code) => { setActiveLang(code); setActiveGenre(null); setActiveYear(null); }}
+            getKey={(l) => l.code}
+            getLabel={(l) => l.label}
+            getCount={(l) => l.count}
+          />
+        )}
 
+        {/* Genre pills (niveau 2) */}
+        {genres.length > 0 && (
+          <PillRow
+            items={genres}
+            active={activeGenre}
+            onSelect={setActiveGenre}
+            getKey={(g) => g.slug}
+            getLabel={(g) => g.label}
+            getCount={(g) => g.count}
+          />
+        )}
+
+        {/* Grid */}
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {Array.from({ length: 12 }).map((_, i) => <SkeletonCard key={i} />)}
@@ -315,6 +403,9 @@ export default function MoviesPage() {
             <div ref={loaderRef} className="py-4 flex justify-center">
               {loadingMore && (
                 <div className="w-6 h-6 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
+              )}
+              {!hasMore && movies.length > 0 && (
+                <p className="text-white/20 text-xs">{t("load_more_end")}</p>
               )}
             </div>
           </>

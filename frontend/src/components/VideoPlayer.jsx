@@ -11,7 +11,7 @@ const LIVE_RE = /\/live\/[^/]+\/[^/]+\/(\d+)\.m3u8/;
 function getProxyUrl(url) {
   if (!url) return "";
   const m = url.match(LIVE_RE);
-  return m ? `/api/xtream/proxy/${m[1]}/` : url;
+  return m ? `/api/xtream/proxy/${m[1]}/?t=${Date.now()}` : url;
 }
 
 export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = true }) {
@@ -129,8 +129,17 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
     return () => {
       destroyed = true;
-      hlsRef.current?.destroy();
-      hlsRef.current = null;
+      if (hlsRef.current) {
+        hlsRef.current.stopLoad();
+        hlsRef.current.detachMedia();
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute("src");
+        videoRef.current.load();
+      }
     };
   }, [src, autoPlay, retryKey]);
 

@@ -34,9 +34,15 @@ class Channel(models.Model):
     is_adult = models.BooleanField(default=False, db_index=True, help_text="Contenu adulte — masqué sans PIN")
     language = models.CharField(max_length=50, blank=True)
     country = models.CharField(max_length=50, blank=True, default="BF")
+    lang_code = models.CharField(max_length=10, blank=True, db_index=True)
+    genre_slug = models.CharField(max_length=60, blank=True, db_index=True)
+    quality = models.CharField(max_length=20, blank=True)
 
     class Meta:
         ordering = ["order", "name"]
+        indexes = [
+            models.Index(fields=["lang_code", "genre_slug"], name="channel_lang_genre_idx"),
+        ]
         verbose_name = "Chaîne"
         verbose_name_plural = "Chaînes"
 

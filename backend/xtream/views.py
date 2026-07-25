@@ -235,7 +235,8 @@ class XtreamStreamProxyView(APIView):
                     "\n".join(out), content_type="application/vnd.apple.mpegurl"
                 )
                 r["Access-Control-Allow-Origin"] = "*"
-                r["Cache-Control"] = "no-cache"
+                r["Cache-Control"] = "no-cache, no-store, must-revalidate"
+                r["Pragma"] = "no-cache"
                 return r
             except Exception as exc:
                 logger.warning("Proxy m3u8 error stream=%s server=%s: %s", stream_id, server_url, exc)

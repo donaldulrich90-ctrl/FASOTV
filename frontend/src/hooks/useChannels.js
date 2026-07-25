@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import api from "../services/api";
 
-export function usePaginatedChannels(search, categoryId) {
+export function usePaginatedChannels(search, categoryId, langCode) {
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
@@ -12,7 +12,7 @@ export function usePaginatedChannels(search, categoryId) {
     setPage(1);
     setItems([]);
     setHasMore(false);
-  }, [search, categoryId]);
+  }, [search, categoryId, langCode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -22,6 +22,7 @@ export function usePaginatedChannels(search, categoryId) {
     const params = { page };
     if (search) params.search = search;
     if (categoryId) params.category = categoryId;
+    if (langCode) params.lang = langCode;
 
     api.get("/channels/", { params }).then((r) => {
       if (cancelled) return;
@@ -33,7 +34,7 @@ export function usePaginatedChannels(search, categoryId) {
     });
 
     return () => { cancelled = true; };
-  }, [page, search, categoryId]);
+  }, [page, search, categoryId, langCode]);
 
   const loadMore = useCallback(() => setPage((p) => p + 1), []);
 

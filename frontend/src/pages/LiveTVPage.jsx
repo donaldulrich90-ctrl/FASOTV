@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePaginatedChannels } from "../hooks/useChannels";
+import { useLanguages } from "../hooks/useCatalog";
 import { MdSearch, MdLiveTv, MdFavorite, MdFavoriteBorder, MdPeople } from "react-icons/md";
 import api from "../services/api";
 import toast from "react-hot-toast";
@@ -9,7 +10,7 @@ function SkeletonCard() {
   return <div className="card p-3 h-20 animate-pulse bg-card/60" />;
 }
 
-function CategoryFilter({ categories, active, onChange }) {
+function LangFilter({ languages, active, onChange }) {
   return (
     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
       <button
@@ -20,12 +21,39 @@ function CategoryFilter({ categories, active, onChange }) {
       >
         Tous
       </button>
+      {languages.map((l) => (
+        <button
+          key={l.code}
+          onClick={() => onChange(l.code === active ? null : l.code)}
+          className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all ${
+            active === l.code ? "bg-gold text-black" : "bg-card text-white/60 hover:text-white"
+          }`}
+        >
+          {l.label}
+          <span className="ml-1 text-xs opacity-60">({l.count})</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CategoryFilter({ categories, active, onChange }) {
+  return (
+    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <button
+        onClick={() => onChange(null)}
+        className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all ${
+          active === null ? "bg-gold/80 text-black" : "bg-card/60 text-white/50 hover:text-white"
+        }`}
+      >
+        Catégories
+      </button>
       {categories.map((cat) => (
         <button
           key={cat.id}
-          onClick={() => onChange(cat.id)}
+          onClick={() => onChange(cat.id === active ? null : cat.id)}
           className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all ${
-            active === cat.id ? "bg-gold text-black" : "bg-card text-white/60 hover:text-white"
+            active === cat.id ? "bg-gold/80 text-black" : "bg-card/60 text-white/50 hover:text-white"
           }`}
         >
           {cat.name}
@@ -73,10 +101,13 @@ export default function LiveTVPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState(null);
+  const [activeLang, setActiveLang] = useState(null);
   const [categories, setCategories] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
   const loaderRef = useRef(null);
   const navigate = useNavigate();
+
+  const { languages } = useLanguages("live");
 
   useEffect(() => {
     api.get("/channels/categories/").then((r) => setCategories(r.data.results || r.data)).catch(() => {});
@@ -87,7 +118,11 @@ export default function LiveTVPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const { items: channels, loading, loadingMore, hasMore, loadMore } = usePaginatedChannels(debouncedSearch, activeCategory);
+  const { items: channels, loading, loadingMore, hasMore, loadMore } = usePaginatedChannels(
+    debouncedSearch,
+    activeCategory,
+    activeLang,
+  );
 
   useEffect(() => {
     if (!loaderRef.current) return;
@@ -117,7 +152,7 @@ export default function LiveTVPage() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-5 animate-fade-in">
+    <div className="p-4 md:p-6 space-y-4 animate-fade-in">
       <div className="flex items-center gap-3">
         <MdLiveTv className="text-gold text-2xl flex-shrink-0" />
         <h1 className="text-2xl font-bold">Live TV</h1>
@@ -135,6 +170,12 @@ export default function LiveTVPage() {
         />
       </div>
 
+      {/* Niveau 1 : langue */}
+      {languages.length > 0 && (
+        <LangFilter languages={languages} active={activeLang} onChange={setActiveLang} />
+      )}
+
+      {/* Niveau 2 : catégorie */}
       <CategoryFilter categories={categories} active={activeCategory} onChange={setActiveCategory} />
 
       {loading ? (

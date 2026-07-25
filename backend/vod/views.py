@@ -3,7 +3,7 @@ from rest_framework import generics, filters, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django_filters.rest_framework import DjangoFilterBackend
+from django_filters import rest_framework as df
 
 from accounts.helpers import adult_allowed
 from .models import Movie, Series, Favorite, WatchHistory
@@ -26,11 +26,31 @@ except ImportError:
     pass
 
 
+class MovieFilter(df.FilterSet):
+    lang = df.CharFilter(field_name="lang_code", lookup_expr="iexact")
+    genre = df.CharFilter(field_name="genre_slug", lookup_expr="exact")
+    year = df.NumberFilter(field_name="year")
+
+    class Meta:
+        model = Movie
+        fields = ["genre", "is_featured", "lang_code", "genre_slug", "year"]
+
+
+class SeriesFilter(df.FilterSet):
+    lang = df.CharFilter(field_name="lang_code", lookup_expr="iexact")
+    genre = df.CharFilter(field_name="genre_slug", lookup_expr="exact")
+    year = df.NumberFilter(field_name="release_year")
+
+    class Meta:
+        model = Series
+        fields = ["genre", "is_featured", "lang_code", "genre_slug", "release_year"]
+
+
 class MovieListView(generics.ListAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = MovieListSerializer
-    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
-    filterset_fields = ("genre", "is_featured")
+    filter_backends = (df.DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
+    filterset_class = MovieFilter
     search_fields = ("title", "description", "genre")
     ordering_fields = ("rating", "year", "title", "created_at")
 
@@ -38,6 +58,17 @@ class MovieListView(generics.ListAPIView):
         qs = Movie.objects.filter(is_active=True)
         if not adult_allowed(self.request):
             qs = qs.filter(is_adult=False)
+
+        sort = self.request.query_params.get("sort", "")
+        if sort == "recent":
+            qs = qs.order_by("-created_at")
+        elif sort == "year":
+            qs = qs.order_by("-year")
+        elif sort == "alpha":
+            qs = qs.order_by("title")
+        elif sort == "rating":
+            qs = qs.order_by("-rating")
+
         return qs
 
 
@@ -55,15 +86,26 @@ class MovieDetailView(generics.RetrieveAPIView):
 class SeriesListView(generics.ListAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = SeriesListSerializer
-    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
-    filterset_fields = ("genre", "is_featured")
+    filter_backends = (df.DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
+    filterset_class = SeriesFilter
     search_fields = ("title", "description", "genre")
-    ordering_fields = ("rating", "title", "created_at")
+    ordering_fields = ("rating", "title", "created_at", "release_year")
 
     def get_queryset(self):
         qs = Series.objects.filter(is_active=True)
         if not adult_allowed(self.request):
             qs = qs.filter(is_adult=False)
+
+        sort = self.request.query_params.get("sort", "")
+        if sort == "recent":
+            qs = qs.order_by("-created_at")
+        elif sort == "year":
+            qs = qs.order_by("-release_year")
+        elif sort == "alpha":
+            qs = qs.order_by("title")
+        elif sort == "rating":
+            qs = qs.order_by("-rating")
+
         return qs
 
 

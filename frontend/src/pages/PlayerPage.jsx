@@ -134,6 +134,7 @@ export default function PlayerPage() {
       {/* Player */}
       {streamUrl ? (
         <VideoPlayer
+          key={id}
           src={streamUrl}
           title={title}
           onPrev={type === "live" && currentIdx > 0 ? handlePrev : undefined}
