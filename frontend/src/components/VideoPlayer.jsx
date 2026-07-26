@@ -6,12 +6,16 @@ import {
 } from "react-icons/md";
 import useTranslation from "../hooks/useTranslation";
 
-const LIVE_RE = /\/live\/[^/]+\/[^/]+\/(\d+)\.m3u8/;
+const STREAM_RE = /\/(live|movie|series)\/[^/]+\/[^/]+\/(\d+)\.(m3u8|mp4|ts)/;
 
 function getProxyUrl(url) {
   if (!url) return "";
-  const m = url.match(LIVE_RE);
-  return m ? `/api/xtream/proxy/${m[1]}/?t=${Date.now()}` : url;
+  const m = url.match(STREAM_RE);
+  if (m) {
+    const [, type, id, ext] = m;
+    return `/api/xtream/proxy/${id}/?type=${type}&ext=${ext}&t=${Date.now()}`;
+  }
+  return url;
 }
 
 export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = true }) {

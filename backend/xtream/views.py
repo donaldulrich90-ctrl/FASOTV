@@ -193,25 +193,66 @@ class XtreamSeriesEpisodesView(APIView):
         return Response(data)
 
 
-# ── Unauthenticated proxy view (m3u8 only — segments go directly via nginx) ──
+# ── Proxy view — live/movie/series, m3u8/mp4/ts, segments via nginx /seg/ ──
 
 class XtreamStreamProxyView(APIView):
-    """Fetches the m3u8 playlist, follows redirects to get the real IP-direct
-    URL, then rewrites every segment line to /seg/<host><path> so that nginx
-    proxies the binary segments — Django never touches the .ts data."""
+    """For m3u8/ts: fetches the playlist, follows redirects, rewrites segment
+    lines to /seg/<host><path> so nginx handles binary data.
+    For mp4: resolves the final URL via HEAD then 302 → /seg/<host><path>."""
     permission_classes = []
     authentication_classes = [JWTAuthentication, SessionAuthentication]
 
     def get(self, request, stream_id):
+        stream_type = request.GET.get("type", "live")
+        if stream_type not in ("live", "movie", "series"):
+            stream_type = "live"
+
+        ext = request.GET.get("ext", "m3u8")
+        if ext not in ("m3u8", "ts", "mp4"):
+            ext = "m3u8"
+
+        # Adult-content guard per content type
         from channels.models import Channel as ChannelModel
-        if ChannelModel.objects.filter(xtream_id=stream_id, is_adult=True).exists():
-            if not adult_allowed(request):
-                return HttpResponse("Forbidden", status=403)
+        if stream_type == "live":
+            if ChannelModel.objects.filter(xtream_id=stream_id, is_adult=True).exists():
+                if not adult_allowed(request):
+                    return HttpResponse("Forbidden", status=403)
+        elif stream_type == "movie":
+            from vod.models import Movie
+            if Movie.objects.filter(xtream_id=stream_id, is_adult=True).exists():
+                if not adult_allowed(request):
+                    return HttpResponse("Forbidden", status=403)
+        elif stream_type == "series":
+            from vod.models import Series
+            if Series.objects.filter(xtream_id=stream_id, is_adult=True).exists():
+                if not adult_allowed(request):
+                    return HttpResponse("Forbidden", status=403)
 
         last_exc = None
         for server_url, username, password, user_agent in _iter_servers():
-            url = f"{server_url}/live/{username}/{password}/{stream_id}.m3u8"
+            url = f"{server_url}/{stream_type}/{username}/{password}/{stream_id}.{ext}"
             try:
+                if ext == "mp4":
+                    # Resolve redirects via HEAD then send client to nginx /seg/
+                    resp = http_requests.head(
+                        url,
+                        headers={"User-Agent": user_agent},
+                        timeout=15,
+                        allow_redirects=True,
+                    )
+                    if resp.status_code == 404:
+                        return HttpResponse("Stream not found", status=404)
+                    if not resp.ok:
+                        last_exc = Exception(f"HTTP {resp.status_code} from {server_url}")
+                        continue
+                    final = urlparse(resp.url)
+                    seg_url = f"/seg/{final.netloc}{final.path}"
+                    if final.query:
+                        seg_url += f"?{final.query}"
+                    from django.http import HttpResponseRedirect
+                    return HttpResponseRedirect(seg_url)
+
+                # m3u8 / ts — fetch manifest, rewrite segment lines
                 resp = http_requests.get(
                     url,
                     headers={"User-Agent": user_agent},
@@ -251,7 +292,7 @@ class XtreamStreamProxyView(APIView):
                 r["Pragma"] = "no-cache"
                 return r
             except Exception as exc:
-                logger.warning("Proxy m3u8 error stream=%s server=%s: %s", stream_id, server_url, exc)
+                logger.warning("Proxy error stream=%s server=%s: %s", stream_id, server_url, exc)
                 last_exc = exc
                 continue
 
