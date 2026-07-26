@@ -1,7 +1,7 @@
 import re
 from django.utils.text import slugify as django_slugify
 
-_STAR_SEP = " ✪ "  # " ✪ "
+_SEP_RE = re.compile(r'^([A-Z]{2,5})\s*[✪❖★|\-]\s*(.+)$')
 _SUFFIX_RE = re.compile(r"\s*[\[\(][^\]\)]*[\]\)]\s*$")
 _QUALITY_RE = re.compile(r"\b(8K|4K|UHD|FHD|HD|SD)\b", re.IGNORECASE)
 _ADULT_RE = re.compile(
@@ -74,11 +74,10 @@ def get_lang_label(code: str, lang: str = "fr") -> str:
     return entry.get(lang) or entry.get("fr") or code
 
 
-def parse_category(raw_name: str, separator: str = _STAR_SEP) -> dict:
+def parse_category(raw_name: str) -> dict:
     """Parse a provider category name into taxonomy fields.
 
-    Expected format: "<LANG_CODE> ✪ <genre> [quality suffix]"
-    Falls back to | and " - " separators for other providers.
+    Recognised separator pattern: r'^([A-Z]{2,5})\\s*[✪❖★|\\-]\\s*(.+)$'
     """
     result = {
         "lang_code": "",
@@ -104,23 +103,15 @@ def parse_category(raw_name: str, separator: str = _STAR_SEP) -> dict:
     if not result["is_high_bitrate"]:
         result["is_high_bitrate"] = bool(_HIGH_BR_RE.search(raw_name))
 
-    # Try separators: provided one first, then ✪, |, " - "
-    sep_candidates = [separator]
-    for fallback in [_STAR_SEP, "|", " - "]:
-        if fallback not in sep_candidates:
-            sep_candidates.append(fallback)
-
     lang_code = ""
     genre_raw = raw_name
 
-    for sep in sep_candidates:
-        if sep in raw_name:
-            parts = raw_name.split(sep, 1)
-            candidate = parts[0].strip().upper()
-            if candidate in KNOWN_LANG_CODES:
-                lang_code = candidate
-                genre_raw = parts[1].strip()
-                break
+    m = _SEP_RE.match(raw_name)
+    if m:
+        candidate = m.group(1).upper()
+        if candidate in KNOWN_LANG_CODES:
+            lang_code = candidate
+            genre_raw = m.group(2).strip()
 
     genre_clean = _clean_suffix(genre_raw)
     result["lang_code"] = lang_code
