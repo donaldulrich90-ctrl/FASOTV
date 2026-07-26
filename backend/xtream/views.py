@@ -170,11 +170,23 @@ class XtreamSeriesEpisodesView(APIView):
     permission_classes = (IsAuthenticated,)
 
     def get(self, request, series_id):
-        cache_key = f"xtream_series_ep_{series_id}"
+        from vod.models import Series
+
+        series = Series.objects.filter(id=series_id).first()
+        if not series:
+            series = Series.objects.filter(xtream_id=series_id).first()
+        if not series:
+            return Response({"error": "Series not found"}, status=404)
+
+        xtream_id = series.xtream_id
+        if not xtream_id:
+            return Response({"error": "Series has no Xtream ID"}, status=404)
+
+        cache_key = f"xtream_series_ep_{xtream_id}"
         data = cache.get(cache_key)
         if data is None:
             try:
-                data = _get_client().get_series_info(series_id)
+                data = _get_client().get_series_info(xtream_id)
                 cache.set(cache_key, data, 6 * 3600)
             except Exception as exc:
                 return Response({"detail": str(exc)}, status=400)
