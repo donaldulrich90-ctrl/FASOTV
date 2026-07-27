@@ -3,6 +3,7 @@ import { isFavorite, addFavorite, removeFavorite } from "../utils/store";
 import useTranslation from "../hooks/useTranslation";
 import { useLanguages, useGenres } from "../hooks/useCatalog";
 import api from "../services/api";
+import VideoPlayer from "../components/VideoPlayer";
 import {
   MdSearch, MdMovie, MdStar, MdPlayArrow, MdClose,
   MdFavorite, MdFavoriteBorder, MdWhatsapp,
@@ -153,19 +154,7 @@ function MovieModal({ movie, onClose }) {
           </div>
           <button onClick={onClose} className="text-white/40 hover:text-white p-2"><MdClose className="text-2xl" /></button>
         </div>
-        <div className="relative w-full aspect-video bg-black rounded-card overflow-hidden">
-          <video
-            src={movie.stream_url}
-            controls
-            autoPlay
-            className="w-full h-full"
-            onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }}
-          />
-          <div className="hidden absolute inset-0 flex-col items-center justify-center text-white/40">
-            <MdMovie className="text-5xl mb-3" />
-            <p>Flux vidéo non disponible</p>
-          </div>
-        </div>
+        <VideoPlayer src={movie.stream_url} title={movie.title} />
         <div className="flex items-center gap-2 mt-4">
           <button
             onClick={toggleFav}
