@@ -3,7 +3,7 @@ import requests as http_requests
 from urllib.parse import urlparse
 from django.conf import settings
 from django.core.cache import cache
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.utils.text import slugify
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -196,9 +196,9 @@ class XtreamSeriesEpisodesView(APIView):
 # ── Proxy view — live/movie/series, m3u8/mp4/ts, segments via nginx /seg/ ──
 
 class XtreamStreamProxyView(APIView):
-    """For m3u8/ts: fetches the playlist, follows redirects, rewrites segment
-    lines to /seg/<host><path> so nginx handles binary data.
-    For mp4: resolves the final URL via HEAD then 302 → /seg/<host><path>."""
+    """Fetches the m3u8/ts playlist, follows redirects, rewrites segment lines
+    to /seg/<host><path> so nginx proxies binary data — Django never touches .ts.
+    VOD files (mp4/mkv) are handled by XtreamVODProxyView."""
     permission_classes = []
     authentication_classes = [JWTAuthentication, SessionAuthentication]
 
@@ -208,23 +208,13 @@ class XtreamStreamProxyView(APIView):
             stream_type = "live"
 
         ext = request.GET.get("ext", "m3u8")
-        if ext not in ("m3u8", "ts", "mp4"):
+        if ext not in ("m3u8", "ts"):
             ext = "m3u8"
 
-        # Adult-content guard per content type
+        # Adult-content guard (live only — movie/series go through XtreamVODProxyView)
         from channels.models import Channel as ChannelModel
         if stream_type == "live":
             if ChannelModel.objects.filter(xtream_id=stream_id, is_adult=True).exists():
-                if not adult_allowed(request):
-                    return HttpResponse("Forbidden", status=403)
-        elif stream_type == "movie":
-            from vod.models import Movie
-            if Movie.objects.filter(xtream_id=stream_id, is_adult=True).exists():
-                if not adult_allowed(request):
-                    return HttpResponse("Forbidden", status=403)
-        elif stream_type == "series":
-            from vod.models import Series
-            if Series.objects.filter(xtream_id=stream_id, is_adult=True).exists():
                 if not adult_allowed(request):
                     return HttpResponse("Forbidden", status=403)
 
@@ -232,26 +222,6 @@ class XtreamStreamProxyView(APIView):
         for server_url, username, password, user_agent in _iter_servers():
             url = f"{server_url}/{stream_type}/{username}/{password}/{stream_id}.{ext}"
             try:
-                if ext == "mp4":
-                    # Resolve redirects via HEAD then send client to nginx /seg/
-                    resp = http_requests.head(
-                        url,
-                        headers={"User-Agent": user_agent},
-                        timeout=15,
-                        allow_redirects=True,
-                    )
-                    if resp.status_code == 404:
-                        return HttpResponse("Stream not found", status=404)
-                    if not resp.ok:
-                        last_exc = Exception(f"HTTP {resp.status_code} from {server_url}")
-                        continue
-                    final = urlparse(resp.url)
-                    seg_url = f"/seg/{final.netloc}{final.path}"
-                    if final.query:
-                        seg_url += f"?{final.query}"
-                    from django.http import HttpResponseRedirect
-                    return HttpResponseRedirect(seg_url)
-
                 # m3u8 / ts — fetch manifest, rewrite segment lines
                 resp = http_requests.get(
                     url,
@@ -297,4 +267,84 @@ class XtreamStreamProxyView(APIView):
                 continue
 
         logger.error("All servers failed for stream=%s: %s", stream_id, last_exc)
+        return HttpResponse(str(last_exc) if last_exc else "No server available", status=502)
+
+
+class XtreamVODProxyView(APIView):
+    """Streams VOD files (mp4/mkv/avi) with Range request support for seeking.
+    Tries servers in order; once a 2xx response begins, streams it through Django.
+    NOTE: each concurrent viewer holds one gunicorn worker for the stream duration."""
+    permission_classes = []
+    authentication_classes = [JWTAuthentication, SessionAuthentication]
+
+    def get(self, request, stream_id):
+        stream_type = request.GET.get("type", "movie")
+        if stream_type not in ("movie", "series"):
+            stream_type = "movie"
+
+        ext = request.GET.get("ext", "mp4")
+        if ext not in ("mp4", "mkv", "avi"):
+            ext = "mp4"
+
+        # Adult guard for movies (stream_id == xtream_id for movies).
+        # For series, stream_id is the episode's xtream_id, not the parent series —
+        # gating happens at series-detail level in the frontend.
+        if stream_type == "movie":
+            from vod.models import Movie
+            if Movie.objects.filter(xtream_id=stream_id, is_adult=True).exists():
+                if not adult_allowed(request):
+                    return HttpResponse("Forbidden", status=403)
+
+        req_headers = {}
+        range_header = request.META.get("HTTP_RANGE")
+        if range_header:
+            req_headers["Range"] = range_header
+
+        last_exc = None
+        for server_url, username, password, user_agent in _iter_servers():
+            req_headers["User-Agent"] = user_agent
+            url = f"{server_url}/{stream_type}/{username}/{password}/{stream_id}.{ext}"
+            try:
+                upstream = http_requests.get(
+                    url,
+                    headers=req_headers,
+                    stream=True,
+                    allow_redirects=True,
+                    timeout=30,
+                )
+                if upstream.status_code == 404:
+                    return HttpResponse("Stream not found", status=404)
+                if not upstream.ok:
+                    last_exc = Exception(f"HTTP {upstream.status_code} from {server_url}")
+                    upstream.close()
+                    continue
+
+                content_type = upstream.headers.get("Content-Type", "video/mp4")
+                status_code = upstream.status_code  # 200 or 206
+
+                def stream_gen(resp):
+                    try:
+                        for chunk in resp.iter_content(chunk_size=262144):
+                            if chunk:
+                                yield chunk
+                    finally:
+                        resp.close()
+
+                response = StreamingHttpResponse(
+                    stream_gen(upstream),
+                    status=status_code,
+                    content_type=content_type,
+                )
+                for h in ("Content-Length", "Content-Range", "Accept-Ranges"):
+                    if h in upstream.headers:
+                        response[h] = upstream.headers[h]
+                response["Accept-Ranges"] = "bytes"
+                response["Access-Control-Allow-Origin"] = "*"
+                return response
+            except Exception as exc:
+                logger.warning("VOD proxy error stream=%s server=%s: %s", stream_id, server_url, exc)
+                last_exc = exc
+                continue
+
+        logger.error("VOD all servers failed for stream=%s: %s", stream_id, last_exc)
         return HttpResponse(str(last_exc) if last_exc else "No server available", status=502)

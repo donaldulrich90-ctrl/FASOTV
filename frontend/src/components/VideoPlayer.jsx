@@ -6,16 +6,18 @@ import {
 } from "react-icons/md";
 import useTranslation from "../hooks/useTranslation";
 
-const STREAM_RE = /\/(live|movie|series)\/[^/]+\/[^/]+\/(\d+)\.(m3u8|mp4|ts)/;
+const STREAM_RE = /\/(live|movie|series)\/[^/]+\/[^/]+\/(\d+)\.(m3u8|mp4|mkv|ts|avi)/;
 
 function getProxyUrl(url) {
   if (!url) return "";
   const m = url.match(STREAM_RE);
-  if (m) {
-    const [, type, id, ext] = m;
-    return `/api/xtream/proxy/${id}/?type=${type}&ext=${ext}&t=${Date.now()}`;
+  if (!m) return url;
+  const [, type, id, ext] = m;
+  if (type === "live") {
+    return `/api/xtream/proxy/${id}/?type=live&t=${Date.now()}`;
   }
-  return url;
+  // movie / series → dedicated VOD proxy with Range support
+  return `/api/xtream/vod/${id}/?type=${type}&ext=${ext}`;
 }
 
 export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = true }) {
@@ -58,7 +60,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     } catch (_) {}
   }, []);
 
-  // HLS / native init
+  // HLS / VOD init
   useEffect(() => {
     if (!src || !videoRef.current) return;
     const url = getProxyUrl(src);
@@ -73,6 +75,19 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     setBandwidth(0);
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+
+    // VOD (mp4/mkv) — browser handles Range requests natively, no hls.js needed
+    if (url.includes("/api/xtream/vod/")) {
+      video.src = url;
+      if (autoPlay) video.play().catch(() => {});
+      return () => {
+        if (videoRef.current) {
+          videoRef.current.pause();
+          videoRef.current.removeAttribute("src");
+          videoRef.current.load();
+        }
+      };
+    }
 
     if (Hls.isSupported()) {
       const hls = new Hls({

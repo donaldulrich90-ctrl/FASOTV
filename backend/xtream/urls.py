@@ -10,5 +10,6 @@ urlpatterns = [
     path("epg/<int:stream_id>/", views.XtreamEPGView.as_view(), name="xtream-epg"),
     path("sync/", views.XtreamSyncView.as_view(), name="xtream-sync"),
     path("proxy/<int:stream_id>/", views.XtreamStreamProxyView.as_view(), name="xtream-proxy"),
+    path("vod/<int:stream_id>/", views.XtreamVODProxyView.as_view(), name="xtream-vod-proxy"),
     path("series/<int:series_id>/episodes/", views.XtreamSeriesEpisodesView.as_view(), name="xtream-series-episodes"),
 ]
