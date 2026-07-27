@@ -42,6 +42,13 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
   const [bandwidth, setBandwidth] = useState(0);
   const [seekHint, setSeekHint] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
+  const [videoReady, setVideoReady] = useState(false);
+
+  // Callback ref: sets videoReady=true the moment <video> mounts, triggering the init effect
+  const setVideoRef = useCallback((node) => {
+    videoRef.current = node;
+    if (node) setVideoReady(true);
+  }, []);
 
   const showCtrlsBriefly = useCallback(() => {
     setShowControls(true);
@@ -63,7 +70,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
   // HLS / VOD init
   useEffect(() => {
-    if (!src || !videoRef.current) return;
+    if (!src || !videoReady || !videoRef.current) return;
     const url = getProxyUrl(src);
     const video = videoRef.current;
     let retries = 0;
@@ -80,12 +87,58 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
     // VOD (mp4/mkv) — browser handles Range requests natively, no hls.js needed
     if (url.includes("/api/xtream/vod/")) {
-      const onVODError = () => { setUnavailable(true); setBuffering(false); };
-      video.addEventListener("error", onVODError);
+      let unavailableTimer = null;
+      let metaLoaded = false;
+      let loadStarted = false;
+
+      const markUnavailable = () => {
+        if (destroyed) return;
+        clearTimeout(unavailableTimer);
+        setUnavailable(true);
+        setBuffering(false);
+      };
+
+      // 404 or decode error → unavailable immediately
+      const onError = () => markUnavailable();
+
+      // metadata loaded → video is valid, cancel the timeout
+      const onLoadedMetadata = () => {
+        metaLoaded = true;
+        clearTimeout(unavailableTimer);
+      };
+
+      // stalled during initial load (before metadata) → proxy likely returned bad content
+      const onStalled = () => { if (!metaLoaded) markUnavailable(); };
+
+      // emptied after load started but before metadata → stream source disappeared
+      const onEmptied = () => { if (loadStarted && !metaLoaded) markUnavailable(); };
+
+      const onLoadStart = () => { loadStarted = true; };
+
+      video.addEventListener("error", onError);
+      video.addEventListener("loadedmetadata", onLoadedMetadata);
+      video.addEventListener("stalled", onStalled);
+      video.addEventListener("emptied", onEmptied);
+      video.addEventListener("loadstart", onLoadStart);
+
       video.src = url;
       if (autoPlay) video.play().catch(() => {});
+
+      // Fallback: if after 15s readyState < 2 and playback hasn't started → unavailable
+      unavailableTimer = setTimeout(() => {
+        if (!metaLoaded && video.readyState < 2 && video.currentTime === 0) {
+          markUnavailable();
+        }
+      }, 15000);
+
       return () => {
-        video.removeEventListener("error", onVODError);
+        destroyed = true;
+        clearTimeout(unavailableTimer);
+        video.removeEventListener("error", onError);
+        video.removeEventListener("loadedmetadata", onLoadedMetadata);
+        video.removeEventListener("stalled", onStalled);
+        video.removeEventListener("emptied", onEmptied);
+        video.removeEventListener("loadstart", onLoadStart);
         if (videoRef.current) {
           videoRef.current.pause();
           videoRef.current.removeAttribute("src");
@@ -165,7 +218,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         videoRef.current.load();
       }
     };
-  }, [src, autoPlay, retryKey]);
+  }, [src, autoPlay, retryKey, videoReady]);
 
   // Video element events
   useEffect(() => {
@@ -179,7 +232,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     };
     Object.entries(h).forEach(([e, fn]) => v.addEventListener(e, fn));
     return () => Object.entries(h).forEach(([e, fn]) => v.removeEventListener(e, fn));
-  }, []);
+  }, [videoReady]);
 
   // Fullscreen event
   useEffect(() => {
@@ -285,7 +338,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <video ref={videoRef} className="w-full h-full" playsInline />
+      <video ref={setVideoRef} className="w-full h-full" playsInline />
 
       {/* Buffering spinner + label */}
       {buffering && !error && !unavailable && (
