@@ -379,6 +379,12 @@ const translations = {
     mo: "A sẽn bɩtẽ...",
     di: "A bɛ daminɛ..."
   },
+  player_vod_unavailable: {
+    fr: "Ce contenu n'est pas disponible pour le moment",
+    en: "This content is not available at the moment",
+    mo: "Dẽnd kãnga ka be ye masã",
+    di: "Fɛni nin tɛ ɲɔgɔn sisan"
+  },
 
   // ══════════════════════════════════════
   // TV DIRECT

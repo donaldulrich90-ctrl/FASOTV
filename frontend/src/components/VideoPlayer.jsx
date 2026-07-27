@@ -38,6 +38,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
   const [showControls, setShowControls] = useState(true);
   const [buffering, setBuffering] = useState(true);
   const [error, setError] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const [bandwidth, setBandwidth] = useState(0);
   const [seekHint, setSeekHint] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -69,6 +70,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     let destroyed = false;
 
     setError(false);
+    setUnavailable(false);
     setBuffering(true);
     setLevels([]);
     setCurrentLevel(-1);
@@ -78,9 +80,12 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
     // VOD (mp4/mkv) — browser handles Range requests natively, no hls.js needed
     if (url.includes("/api/xtream/vod/")) {
+      const onVODError = () => { setUnavailable(true); setBuffering(false); };
+      video.addEventListener("error", onVODError);
       video.src = url;
       if (autoPlay) video.play().catch(() => {});
       return () => {
+        video.removeEventListener("error", onVODError);
         if (videoRef.current) {
           videoRef.current.pause();
           videoRef.current.removeAttribute("src");
@@ -283,7 +288,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
       <video ref={videoRef} className="w-full h-full" playsInline />
 
       {/* Buffering spinner + label */}
-      {buffering && !error && (
+      {buffering && !error && !unavailable && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none gap-3">
           <div className="w-12 h-12 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
           <p className="text-white/70 text-sm">{t("player_buffering")}</p>
@@ -309,6 +314,14 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
           >
             <MdReplay /> Réessayer
           </button>
+        </div>
+      )}
+
+      {/* VOD unavailable */}
+      {unavailable && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center p-4">
+          <MdSignalCellularAlt className="text-white/30 text-4xl mb-3" />
+          <p className="text-white font-semibold">{t("player_vod_unavailable")}</p>
         </div>
       )}
 

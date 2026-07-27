@@ -19,6 +19,11 @@ from .utils import is_high_bitrate, is_radio
 logger = logging.getLogger(__name__)
 
 
+def _is_video_content_type(ct):
+    ct = (ct or "").lower()
+    return any(k in ct for k in ("video/", "octet-stream", "mp4", "matroska", "avi"))
+
+
 def _iter_servers():
     """Yield (url, username, password, user_agent) for all active servers in priority order.
     Falls back to Django settings if no DB servers are configured."""
@@ -295,31 +300,59 @@ class XtreamVODProxyView(APIView):
                 if not adult_allowed(request):
                     return HttpResponse("Forbidden", status=403)
 
-        req_headers = {}
         range_header = request.META.get("HTTP_RANGE")
-        if range_header:
-            req_headers["Range"] = range_header
 
         last_exc = None
         for server_url, username, password, user_agent in _iter_servers():
-            req_headers["User-Agent"] = user_agent
             url = f"{server_url}/{stream_type}/{username}/{password}/{stream_id}.{ext}"
             try:
-                upstream = http_requests.get(
+                # Step 1 — probe without Range to follow redirects and get the final IP URL.
+                # Sending Range directly on the domain triggers an HTML error response on
+                # some providers; the redirect target (direct IP + token) accepts Range fine.
+                probe = http_requests.get(
                     url,
+                    headers={"User-Agent": user_agent},
+                    stream=True,
+                    allow_redirects=True,
+                    timeout=30,
+                )
+                if probe.status_code == 404:
+                    probe.close()
+                    return HttpResponse("Stream not found", status=404)
+                if not probe.ok:
+                    probe.close()
+                    last_exc = Exception(f"HTTP {probe.status_code} from {server_url}")
+                    continue
+
+                probe_ct = probe.headers.get("Content-Type", "")
+                final_url = probe.url
+                probe.close()
+
+                if not _is_video_content_type(probe_ct):
+                    return HttpResponse("Content unavailable", status=404)
+
+                # Step 2 — real request on the resolved IP URL, with Range if requested.
+                req_headers = {"User-Agent": user_agent}
+                if range_header:
+                    req_headers["Range"] = range_header
+
+                upstream = http_requests.get(
+                    final_url,
                     headers=req_headers,
                     stream=True,
                     allow_redirects=True,
                     timeout=30,
                 )
-                if upstream.status_code == 404:
-                    return HttpResponse("Stream not found", status=404)
                 if not upstream.ok:
-                    last_exc = Exception(f"HTTP {upstream.status_code} from {server_url}")
                     upstream.close()
+                    last_exc = Exception(f"Range request HTTP {upstream.status_code}")
                     continue
 
                 content_type = upstream.headers.get("Content-Type", "video/mp4")
+                if "text/html" in content_type:
+                    upstream.close()
+                    return HttpResponse("Content unavailable", status=404)
+
                 status_code = upstream.status_code  # 200 or 206
 
                 def stream_gen(resp):
