@@ -16,7 +16,7 @@ function getProxyUrl(url) {
   if (type === "live") {
     return `/api/xtream/proxy/${id}/?type=live&t=${Date.now()}`;
   }
-  // movie / series → dedicated VOD proxy with Range support
+  // movie / series ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ dedicated VOD proxy with Range support
   return `/api/xtream/vod/${id}/?type=${type}&ext=${ext}`;
 }
 
@@ -85,7 +85,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
 
-    // VOD (mp4/mkv) — browser handles Range requests natively, no hls.js needed
+    // VOD (mp4/mkv) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â browser handles Range requests natively, no hls.js needed
     if (url.includes("/api/xtream/vod/")) {
       let unavailableTimer = null;
       let metaLoaded = false;
@@ -98,19 +98,19 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         setBuffering(false);
       };
 
-      // 404 or decode error → unavailable immediately
+      // 404 or decode error ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ unavailable immediately
       const onError = () => markUnavailable();
 
-      // metadata loaded → video is valid, cancel the timeout
+      // metadata loaded ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ video is valid, cancel the timeout
       const onLoadedMetadata = () => {
         metaLoaded = true;
         clearTimeout(unavailableTimer);
       };
 
-      // stalled during initial load (before metadata) → proxy likely returned bad content
+      // stalled during initial load (before metadata) ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ proxy likely returned bad content
       const onStalled = () => { if (!metaLoaded) markUnavailable(); };
 
-      // emptied after load started but before metadata → stream source disappeared
+      // emptied after load started but before metadata ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ stream source disappeared
       const onEmptied = () => { if (loadStarted && !metaLoaded) markUnavailable(); };
 
       const onLoadStart = () => { loadStarted = true; };
@@ -124,7 +124,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
       video.src = url;
       if (autoPlay) video.play().catch(() => {});
 
-      // Fallback: if after 15s readyState < 2 and playback hasn't started → unavailable
+      // Fallback: if after 15s readyState < 2 and playback hasn't started ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ unavailable
       unavailableTimer = setTimeout(() => {
         if (!metaLoaded && video.readyState < 2 && video.currentTime === 0) {
           markUnavailable();
@@ -241,7 +241,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     return () => document.removeEventListener("fullscreenchange", h);
   }, []);
 
-  // Keyboard — desktop + TV remote
+  // Keyboard ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â desktop + TV remote
   useEffect(() => {
     const onKey = (e) => {
       const v = videoRef.current;
@@ -269,7 +269,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     return () => document.removeEventListener("keydown", onKey);
   }, [onNext, onPrev, toggleFullscreen, showCtrlsBriefly]);
 
-  // Touch start — record position for swipe detection
+  // Touch start ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â record position for swipe detection
   const handleTouchStart = (e) => {
     touchStartRef.current = {
       x: e.touches[0].clientX,
@@ -279,7 +279,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     showCtrlsBriefly();
   };
 
-  // Touch end — swipe (channel) or tap (play) or double-tap (seek)
+  // Touch end ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â swipe (channel) or tap (play) or double-tap (seek)
   const handleTouchEnd = (e) => {
     const start = touchStartRef.current;
     if (!start) return;
@@ -288,7 +288,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     const dy = touch.clientY - start.y;
     const dt = Date.now() - start.t;
 
-    // Horizontal swipe → channel change
+    // Horizontal swipe ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ channel change
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2 && dt < 400) {
       if (dx > 0 && onPrev) { onPrev(); return; }
       if (dx < 0 && onNext) { onNext(); return; }
@@ -297,7 +297,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     // Tap with minimal movement
     if (Math.abs(dx) < 15 && Math.abs(dy) < 15) {
       if (tapTimerRef.current) {
-        // Double-tap → seek ±10s
+        // Double-tap ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ seek Ãƒâ€šÃ‚Â±10s
         clearTimeout(tapTimerRef.current);
         tapTimerRef.current = null;
         const rect = containerRef.current.getBoundingClientRect();
@@ -360,12 +360,12 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center p-4">
           <MdSignalCellularAlt className="text-live text-4xl mb-3" />
           <p className="text-white font-semibold mb-1">Erreur de lecture</p>
-          <p className="text-white/50 text-sm mb-4">Vérifiez votre connexion ou réessayez</p>
+          <p className="text-white/50 text-sm mb-4">VÃƒÆ’Ã‚Â©rifiez votre connexion ou rÃƒÆ’Ã‚Â©essayez</p>
           <button
             onClick={() => setRetryKey((k) => k + 1)}
             className="flex items-center gap-2 px-5 py-2.5 bg-gold text-black rounded-btn font-semibold text-sm"
           >
-            <MdReplay /> Réessayer
+            <MdReplay /> RÃƒÆ’Ã‚Â©essayer
           </button>
         </div>
       )}
@@ -401,10 +401,10 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
           {/* Prev / Next */}
           {onPrev && (
-            <button onClick={onPrev} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">◀</button>
+            <button onClick={onPrev} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">ÃƒÂ¢Ã¢â‚¬â€Ã¢â€šÂ¬</button>
           )}
           {onNext && (
-            <button onClick={onNext} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">▶</button>
+            <button onClick={onNext} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¶</button>
           )}
 
           {/* Volume */}
@@ -470,6 +470,5 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     </div>
   );
 }
-/ /   r e b u i l d   2 0 2 6 0 7 2 8 0 0 0 2 1 9 
- 
- 
+
+
