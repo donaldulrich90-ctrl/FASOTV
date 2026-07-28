@@ -72,6 +72,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
   useEffect(() => {
     if (!src || !videoReady || !videoRef.current) return;
     const url = getProxyUrl(src);
+    if (url.includes("/api/xtream/vod/")) return;
     const video = videoRef.current;
     let retries = 0;
     let destroyed = false;
@@ -329,6 +330,9 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     if (hlsRef.current) { hlsRef.current.currentLevel = lvl; setCurrentLevel(lvl); }
   };
 
+  const proxyUrl = src ? getProxyUrl(src) : "";
+  const isVOD = proxyUrl.includes("/api/xtream/vod/");
+
   return (
     <div
       ref={containerRef}
@@ -338,7 +342,18 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      <video ref={setVideoRef} className="w-full h-full" playsInline />
+      <video
+        ref={setVideoRef}
+        className="w-full h-full"
+        playsInline
+        src={isVOD ? proxyUrl : undefined}
+        autoPlay={isVOD && autoPlay}
+        controls={isVOD}
+        onError={() => { if (isVOD) { setUnavailable(true); setBuffering(false); } }}
+        onLoadedData={() => { if (isVOD) setBuffering(false); }}
+        onPlaying={() => { if (isVOD) setBuffering(false); }}
+        onWaiting={() => { if (isVOD) setBuffering(true); }}
+      />
 
       {/* Buffering spinner + label */}
       {buffering && !error && !unavailable && (
