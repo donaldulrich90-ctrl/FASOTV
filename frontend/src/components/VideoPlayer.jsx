@@ -10,13 +10,19 @@ const STREAM_RE = /\/(live|movie|series)\/[^/]+\/[^/]+\/(\d+)\.(m3u8|mp4|mkv|ts|
 
 function getProxyUrl(url) {
   if (!url) return "";
-  const m = url.match(STREAM_RE);
+  let m = url.match(STREAM_RE);
+  if (!m) {
+    // Permissive fallback: any /type/.../ID.ext pattern
+    m = url.match(/\/(live|movie|series)\/.*?\/(\d+)\.(\w+)/);
+  }
   if (!m) return url;
-  const [, type, id, ext] = m;
+  const type = m[1];
+  const id = m[2];
+  const ext = m[3];
   if (type === "live") {
     return `/api/xtream/proxy/${id}/?type=live&t=${Date.now()}`;
   }
-  // movie / series ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ dedicated VOD proxy with Range support
+  // movie / series -> dedicated VOD proxy with Range support
   return `/api/xtream/vod/${id}/?type=${type}&ext=${ext}`;
 }
 
@@ -42,13 +48,10 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
   const [bandwidth, setBandwidth] = useState(0);
   const [seekHint, setSeekHint] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
-  const [videoReady, setVideoReady] = useState(false);
 
-  // Callback ref: sets videoReady=true the moment <video> mounts, triggering the init effect
-  const setVideoRef = useCallback((node) => {
-    videoRef.current = node;
-    if (node) setVideoReady(true);
-  }, []);
+  // Derived once per render - drives the <video> src for VOD
+  const proxyUrl = src ? getProxyUrl(src) : "";
+  const isVOD = proxyUrl.includes("/api/xtream/vod/");
 
   const showCtrlsBriefly = useCallback(() => {
     setShowControls(true);
@@ -68,85 +71,48 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     } catch (_) {}
   }, []);
 
-  // HLS / VOD init
+  // Reset states whenever the source changes
   useEffect(() => {
-    if (!src || !videoReady || !videoRef.current) return;
-    const url = getProxyUrl(src);
-    if (url.includes("/api/xtream/vod/")) return;
-    const video = videoRef.current;
-    let retries = 0;
-    let destroyed = false;
-
     setError(false);
     setUnavailable(false);
     setBuffering(true);
+    if (isVOD) {
+      // VOD is driven entirely by the <video src=...> attribute below.
+      // A safety timer flags the film unavailable if nothing loads.
+      const video = videoRef.current;
+      if (!video) return;
+      let done = false;
+      const timer = setTimeout(() => {
+        if (!done && video.readyState < 2 && video.currentTime === 0) {
+          setUnavailable(true);
+          setBuffering(false);
+        }
+      }, 15000);
+      const clear = () => { done = true; clearTimeout(timer); };
+      video.addEventListener("loadeddata", clear);
+      video.addEventListener("playing", clear);
+      return () => {
+        clearTimeout(timer);
+        video.removeEventListener("loadeddata", clear);
+        video.removeEventListener("playing", clear);
+      };
+    }
+  }, [src, retryKey, isVOD]);
+
+  // HLS init - LIVE only (VOD handled by <video src>)
+  useEffect(() => {
+    if (!src || isVOD) return;
+    const video = videoRef.current;
+    if (!video) return;
+    const url = getProxyUrl(src);
+    let retries = 0;
+    let destroyed = false;
+
     setLevels([]);
     setCurrentLevel(-1);
     setBandwidth(0);
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
-
-    // VOD (mp4/mkv) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â browser handles Range requests natively, no hls.js needed
-    if (url.includes("/api/xtream/vod/")) {
-      let unavailableTimer = null;
-      let metaLoaded = false;
-      let loadStarted = false;
-
-      const markUnavailable = () => {
-        if (destroyed) return;
-        clearTimeout(unavailableTimer);
-        setUnavailable(true);
-        setBuffering(false);
-      };
-
-      // 404 or decode error ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ unavailable immediately
-      const onError = () => markUnavailable();
-
-      // metadata loaded ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ video is valid, cancel the timeout
-      const onLoadedMetadata = () => {
-        metaLoaded = true;
-        clearTimeout(unavailableTimer);
-      };
-
-      // stalled during initial load (before metadata) ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ proxy likely returned bad content
-      const onStalled = () => { if (!metaLoaded) markUnavailable(); };
-
-      // emptied after load started but before metadata ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ stream source disappeared
-      const onEmptied = () => { if (loadStarted && !metaLoaded) markUnavailable(); };
-
-      const onLoadStart = () => { loadStarted = true; };
-
-      video.addEventListener("error", onError);
-      video.addEventListener("loadedmetadata", onLoadedMetadata);
-      video.addEventListener("stalled", onStalled);
-      video.addEventListener("emptied", onEmptied);
-      video.addEventListener("loadstart", onLoadStart);
-
-      video.src = url;
-      if (autoPlay) video.play().catch(() => {});
-
-      // Fallback: if after 15s readyState < 2 and playback hasn't started ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ unavailable
-      unavailableTimer = setTimeout(() => {
-        if (!metaLoaded && video.readyState < 2 && video.currentTime === 0) {
-          markUnavailable();
-        }
-      }, 15000);
-
-      return () => {
-        destroyed = true;
-        clearTimeout(unavailableTimer);
-        video.removeEventListener("error", onError);
-        video.removeEventListener("loadedmetadata", onLoadedMetadata);
-        video.removeEventListener("stalled", onStalled);
-        video.removeEventListener("emptied", onEmptied);
-        video.removeEventListener("loadstart", onLoadStart);
-        if (videoRef.current) {
-          videoRef.current.pause();
-          videoRef.current.removeAttribute("src");
-          videoRef.current.load();
-        }
-      };
-    }
 
     if (Hls.isSupported()) {
       const hls = new Hls({
@@ -197,7 +163,6 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         }
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      // Safari / iOS native HLS
       video.src = url;
       if (autoPlay) video.play().catch(() => {});
     } else {
@@ -213,13 +178,8 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
-      if (videoRef.current) {
-        videoRef.current.pause();
-        videoRef.current.removeAttribute("src");
-        videoRef.current.load();
-      }
     };
-  }, [src, autoPlay, retryKey, videoReady]);
+  }, [src, autoPlay, retryKey, isVOD]);
 
   // Video element events
   useEffect(() => {
@@ -233,7 +193,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     };
     Object.entries(h).forEach(([e, fn]) => v.addEventListener(e, fn));
     return () => Object.entries(h).forEach(([e, fn]) => v.removeEventListener(e, fn));
-  }, [videoReady]);
+  }, [src]);
 
   // Fullscreen event
   useEffect(() => {
@@ -242,7 +202,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     return () => document.removeEventListener("fullscreenchange", h);
   }, []);
 
-  // Keyboard ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â desktop + TV remote
+  // Keyboard - desktop + TV remote
   useEffect(() => {
     const onKey = (e) => {
       const v = videoRef.current;
@@ -270,7 +230,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     return () => document.removeEventListener("keydown", onKey);
   }, [onNext, onPrev, toggleFullscreen, showCtrlsBriefly]);
 
-  // Touch start ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â record position for swipe detection
+  // Touch start - record position for swipe detection
   const handleTouchStart = (e) => {
     touchStartRef.current = {
       x: e.touches[0].clientX,
@@ -280,7 +240,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     showCtrlsBriefly();
   };
 
-  // Touch end ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â swipe (channel) or tap (play) or double-tap (seek)
+  // Touch end - swipe (channel) or tap (play) or double-tap (seek)
   const handleTouchEnd = (e) => {
     const start = touchStartRef.current;
     if (!start) return;
@@ -289,7 +249,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     const dy = touch.clientY - start.y;
     const dt = Date.now() - start.t;
 
-    // Horizontal swipe ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ channel change
+    // Horizontal swipe -> channel change
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2 && dt < 400) {
       if (dx > 0 && onPrev) { onPrev(); return; }
       if (dx < 0 && onNext) { onNext(); return; }
@@ -298,7 +258,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     // Tap with minimal movement
     if (Math.abs(dx) < 15 && Math.abs(dy) < 15) {
       if (tapTimerRef.current) {
-        // Double-tap ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ seek Ãƒâ€šÃ‚Â±10s
+        // Double-tap -> seek +/-10s
         clearTimeout(tapTimerRef.current);
         tapTimerRef.current = null;
         const rect = containerRef.current.getBoundingClientRect();
@@ -330,9 +290,6 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     if (hlsRef.current) { hlsRef.current.currentLevel = lvl; setCurrentLevel(lvl); }
   };
 
-  const proxyUrl = src ? getProxyUrl(src) : "";
-  const isVOD = proxyUrl.includes("/api/xtream/vod/");
-
   return (
     <div
       ref={containerRef}
@@ -343,12 +300,11 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
       onTouchEnd={handleTouchEnd}
     >
       <video
-        ref={setVideoRef}
+        ref={videoRef}
         className="w-full h-full"
         playsInline
         src={isVOD ? proxyUrl : undefined}
-        autoPlay={isVOD && autoPlay}
-        controls={isVOD}
+        autoPlay={isVOD ? autoPlay : undefined}
         onError={() => { if (isVOD) { setUnavailable(true); setBuffering(false); } }}
         onLoadedData={() => { if (isVOD) setBuffering(false); }}
         onPlaying={() => { if (isVOD) setBuffering(false); }}
@@ -375,12 +331,12 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center p-4">
           <MdSignalCellularAlt className="text-live text-4xl mb-3" />
           <p className="text-white font-semibold mb-1">Erreur de lecture</p>
-          <p className="text-white/50 text-sm mb-4">VÃƒÆ’Ã‚Â©rifiez votre connexion ou rÃƒÆ’Ã‚Â©essayez</p>
+          <p className="text-white/50 text-sm mb-4">Verifiez votre connexion ou reessayez</p>
           <button
             onClick={() => setRetryKey((k) => k + 1)}
             className="flex items-center gap-2 px-5 py-2.5 bg-gold text-black rounded-btn font-semibold text-sm"
           >
-            <MdReplay /> RÃƒÆ’Ã‚Â©essayer
+            <MdReplay /> Reessayer
           </button>
         </div>
       )}
@@ -416,10 +372,10 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
           {/* Prev / Next */}
           {onPrev && (
-            <button onClick={onPrev} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">ÃƒÂ¢Ã¢â‚¬â€Ã¢â€šÂ¬</button>
+            <button onClick={onPrev} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">&#9664;</button>
           )}
           {onNext && (
-            <button onClick={onNext} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">ÃƒÂ¢Ã¢â‚¬â€œÃ‚Â¶</button>
+            <button onClick={onNext} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">&#9654;</button>
           )}
 
           {/* Volume */}
@@ -485,5 +441,3 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     </div>
   );
 }
-
-
