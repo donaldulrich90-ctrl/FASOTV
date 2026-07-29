@@ -3,6 +3,7 @@ import Hls from "hls.js";
 import {
   MdPlayArrow, MdPause, MdVolumeUp, MdVolumeOff,
   MdFullscreen, MdFullscreenExit, MdHd, MdReplay, MdSignalCellularAlt,
+  MdReplay10, MdForward10, MdSkipNext, MdSkipPrevious,
 } from "react-icons/md";
 import useTranslation from "../hooks/useTranslation";
 
@@ -12,7 +13,6 @@ function getProxyUrl(url) {
   if (!url) return "";
   let m = url.match(STREAM_RE);
   if (!m) {
-    // Permissive fallback: any /type/.../ID.ext pattern
     m = url.match(/\/(live|movie|series)\/.*?\/(\d+)\.(\w+)/);
   }
   if (!m) return url;
@@ -22,8 +22,17 @@ function getProxyUrl(url) {
   if (type === "live") {
     return `/api/xtream/proxy/${id}/?type=live&t=${Date.now()}`;
   }
-  // movie / series -> dedicated VOD proxy with Range support
   return `/api/xtream/vod/${id}/?type=${type}&ext=${ext}`;
+}
+
+function fmtTime(sec) {
+  if (!isFinite(sec) || sec < 0) return "0:00";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  const ss = String(s).padStart(2, "0");
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${ss}`;
+  return `${m}:${ss}`;
 }
 
 export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = true }) {
@@ -34,6 +43,7 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
   const tapTimerRef = useRef(null);
   const touchStartRef = useRef(null);
   const controlsTimerRef = useRef(null);
+  const progressRef = useRef(null);
 
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -49,9 +59,14 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
   const [seekHint, setSeekHint] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
 
-  // Derived once per render - drives the <video> src for VOD
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [bufferedEnd, setBufferedEnd] = useState(0);
+  const [dragging, setDragging] = useState(false);
+
   const proxyUrl = src ? getProxyUrl(src) : "";
   const isVOD = proxyUrl.includes("/api/xtream/vod/");
+  const isLive = proxyUrl.includes("/api/xtream/proxy/");
 
   const showCtrlsBriefly = useCallback(() => {
     setShowControls(true);
@@ -71,14 +86,23 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     } catch (_) {}
   }, []);
 
-  // Reset states whenever the source changes
+  const seekBy = useCallback((delta) => {
+    const v = videoRef.current;
+    if (!v || !isFinite(v.duration)) return;
+    v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + delta));
+    setSeekHint(delta > 0 ? `+${delta}s` : `${delta}s`);
+    setTimeout(() => setSeekHint(null), 700);
+    showCtrlsBriefly();
+  }, [showCtrlsBriefly]);
+
   useEffect(() => {
     setError(false);
     setUnavailable(false);
     setBuffering(true);
+    setCurrentTime(0);
+    setDuration(0);
+    setBufferedEnd(0);
     if (isVOD) {
-      // VOD is driven entirely by the <video src=...> attribute below.
-      // A safety timer flags the film unavailable if nothing loads.
       const video = videoRef.current;
       if (!video) return;
       let done = false;
@@ -99,7 +123,6 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     }
   }, [src, retryKey, isVOD]);
 
-  // HLS init - LIVE only (VOD handled by <video src>)
   useEffect(() => {
     if (!src || isVOD) return;
     const video = videoRef.current;
@@ -139,16 +162,12 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         setLevels(d.levels);
         if (autoPlay) video.play().catch(() => {});
       });
-
       hls.on(Hls.Events.LEVEL_SWITCHED, (_, d) => setCurrentLevel(d.level));
-
       hls.on(Hls.Events.FRAG_LOADED, (_, d) => {
         const bw = d.frag.stats.bwEstimate;
         if (bw) setBandwidth(Math.round(bw / 1000));
       });
-
       hls.on(Hls.Events.BUFFER_EMPTIED, () => setBuffering(true));
-
       hls.on(Hls.Events.ERROR, (_, d) => {
         if (d.fatal) {
           if (retries < 3) {
@@ -181,28 +200,49 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     };
   }, [src, autoPlay, retryKey, isVOD]);
 
-  // Video element events
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const h = {
-      play: () => setPlaying(true),
-      pause: () => setPlaying(false),
-      waiting: () => setBuffering(true),
-      playing: () => setBuffering(false),
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    const onWaiting = () => setBuffering(true);
+    const onPlaying = () => setBuffering(false);
+    const onTimeUpdate = () => {
+      if (!dragging) setCurrentTime(v.currentTime);
+      try {
+        if (v.buffered.length) setBufferedEnd(v.buffered.end(v.buffered.length - 1));
+      } catch (_) {}
     };
-    Object.entries(h).forEach(([e, fn]) => v.addEventListener(e, fn));
-    return () => Object.entries(h).forEach(([e, fn]) => v.removeEventListener(e, fn));
-  }, [src]);
+    const onLoadedMeta = () => setDuration(v.duration || 0);
+    const onDurationChange = () => setDuration(v.duration || 0);
+    const onEnded = () => { if (onNext) onNext(); };
 
-  // Fullscreen event
+    v.addEventListener("play", onPlay);
+    v.addEventListener("pause", onPause);
+    v.addEventListener("waiting", onWaiting);
+    v.addEventListener("playing", onPlaying);
+    v.addEventListener("timeupdate", onTimeUpdate);
+    v.addEventListener("loadedmetadata", onLoadedMeta);
+    v.addEventListener("durationchange", onDurationChange);
+    v.addEventListener("ended", onEnded);
+    return () => {
+      v.removeEventListener("play", onPlay);
+      v.removeEventListener("pause", onPause);
+      v.removeEventListener("waiting", onWaiting);
+      v.removeEventListener("playing", onPlaying);
+      v.removeEventListener("timeupdate", onTimeUpdate);
+      v.removeEventListener("loadedmetadata", onLoadedMeta);
+      v.removeEventListener("durationchange", onDurationChange);
+      v.removeEventListener("ended", onEnded);
+    };
+  }, [src, dragging, onNext]);
+
   useEffect(() => {
     const h = () => setFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", h);
     return () => document.removeEventListener("fullscreenchange", h);
   }, []);
 
-  // Keyboard - desktop + TV remote
   useEffect(() => {
     const onKey = (e) => {
       const v = videoRef.current;
@@ -213,13 +253,13 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         case "f": case "F":
           e.preventDefault(); toggleFullscreen(); break;
         case "ArrowLeft":
-          e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 10); break;
+          e.preventDefault(); seekBy(-10); break;
         case "ArrowRight":
-          e.preventDefault(); v.currentTime += 10; break;
-        case "ArrowUp":
-          e.preventDefault(); if (onPrev) onPrev(); break;
-        case "ArrowDown":
+          e.preventDefault(); seekBy(10); break;
+        case "n": case "N":
           e.preventDefault(); if (onNext) onNext(); break;
+        case "p": case "P":
+          e.preventDefault(); if (onPrev) onPrev(); break;
         case "Escape":
           if (document.fullscreenElement) document.exitFullscreen(); break;
         default: return;
@@ -228,9 +268,45 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onNext, onPrev, toggleFullscreen, showCtrlsBriefly]);
+  }, [onNext, onPrev, toggleFullscreen, showCtrlsBriefly, seekBy]);
 
-  // Touch start - record position for swipe detection
+  const seekToClientX = useCallback((clientX) => {
+    const bar = progressRef.current;
+    const v = videoRef.current;
+    if (!bar || !v || !isFinite(v.duration)) return;
+    const rect = bar.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const newTime = ratio * v.duration;
+    setCurrentTime(newTime);
+    v.currentTime = newTime;
+  }, []);
+
+  const onProgressDown = (e) => {
+    if (isLive) return;
+    setDragging(true);
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    seekToClientX(clientX);
+  };
+
+  useEffect(() => {
+    if (!dragging) return;
+    const move = (e) => {
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      seekToClientX(clientX);
+    };
+    const up = () => setDragging(false);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    window.addEventListener("touchmove", move);
+    window.addEventListener("touchend", up);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
+    };
+  }, [dragging, seekToClientX]);
+
   const handleTouchStart = (e) => {
     touchStartRef.current = {
       x: e.touches[0].clientX,
@@ -240,35 +316,20 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     showCtrlsBriefly();
   };
 
-  // Touch end - swipe (channel) or tap (play) or double-tap (seek)
   const handleTouchEnd = (e) => {
     const start = touchStartRef.current;
     if (!start) return;
     const touch = e.changedTouches[0];
     const dx = touch.clientX - start.x;
     const dy = touch.clientY - start.y;
-    const dt = Date.now() - start.t;
 
-    // Horizontal swipe -> channel change
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 2 && dt < 400) {
-      if (dx > 0 && onPrev) { onPrev(); return; }
-      if (dx < 0 && onNext) { onNext(); return; }
-    }
-
-    // Tap with minimal movement
     if (Math.abs(dx) < 15 && Math.abs(dy) < 15) {
       if (tapTimerRef.current) {
-        // Double-tap -> seek +/-10s
         clearTimeout(tapTimerRef.current);
         tapTimerRef.current = null;
         const rect = containerRef.current.getBoundingClientRect();
         const fwd = touch.clientX > rect.left + rect.width / 2;
-        const v = videoRef.current;
-        if (v && isFinite(v.duration)) {
-          v.currentTime = Math.max(0, v.currentTime + (fwd ? 10 : -10));
-        }
-        setSeekHint(fwd ? "+10s" : "-10s");
-        setTimeout(() => setSeekHint(null), 700);
+        seekBy(fwd ? 10 : -10);
       } else {
         tapTimerRef.current = setTimeout(() => {
           tapTimerRef.current = null;
@@ -290,12 +351,15 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
     if (hlsRef.current) { hlsRef.current.currentLevel = lvl; setCurrentLevel(lvl); }
   };
 
+  const progressPct = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const bufferedPct = duration > 0 ? (bufferedEnd / duration) * 100 : 0;
+
   return (
     <div
       ref={containerRef}
       className="relative bg-black w-full aspect-video rounded-card overflow-hidden select-none"
       onMouseMove={showCtrlsBriefly}
-      onMouseLeave={() => setShowControls(false)}
+      onMouseLeave={() => !dragging && setShowControls(false)}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -311,7 +375,6 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         onWaiting={() => { if (isVOD) setBuffering(true); }}
       />
 
-      {/* Buffering spinner + label */}
       {buffering && !error && !unavailable && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 pointer-events-none gap-3">
           <div className="w-12 h-12 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
@@ -319,14 +382,12 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         </div>
       )}
 
-      {/* Double-tap seek feedback */}
       {seekHint && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <span className="text-white text-3xl font-bold bg-black/60 rounded-2xl px-5 py-2">{seekHint}</span>
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center p-4">
           <MdSignalCellularAlt className="text-live text-4xl mb-3" />
@@ -341,7 +402,6 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         </div>
       )}
 
-      {/* VOD unavailable */}
       {unavailable && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 text-center p-4">
           <MdSignalCellularAlt className="text-white/30 text-4xl mb-3" />
@@ -349,44 +409,91 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
         </div>
       )}
 
-      {/* Title bar */}
       {title && showControls && (
         <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/80 to-transparent p-4 transition-opacity">
           <p className="font-semibold">{title}</p>
         </div>
       )}
 
-      {/* Controls bar */}
-      <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 transition-opacity duration-300 ${showControls || !playing ? "opacity-100" : "opacity-0"}`}>
+      {/* Center controls: prev / -10 / play / +10 / next (VOD only) */}
+      {isVOD && showControls && !error && !unavailable && (
+        <div className="absolute inset-0 flex items-center justify-center gap-6 pointer-events-none">
+          {onPrev && (
+            <button onClick={onPrev} className="pointer-events-auto text-white/80 hover:text-white bg-black/40 rounded-full p-2 touch-manipulation">
+              <MdSkipPrevious className="text-3xl" />
+            </button>
+          )}
+          <button onClick={() => seekBy(-10)} className="pointer-events-auto text-white/80 hover:text-white bg-black/40 rounded-full p-2 touch-manipulation">
+            <MdReplay10 className="text-3xl" />
+          </button>
+          <button
+            onClick={() => { const v = videoRef.current; v && (v.paused ? v.play().catch(() => {}) : v.pause()); }}
+            className="pointer-events-auto bg-gold/90 hover:bg-gold rounded-full p-3 touch-manipulation"
+          >
+            {playing ? <MdPause className="text-4xl text-black" /> : <MdPlayArrow className="text-4xl text-black" />}
+          </button>
+          <button onClick={() => seekBy(10)} className="pointer-events-auto text-white/80 hover:text-white bg-black/40 rounded-full p-2 touch-manipulation">
+            <MdForward10 className="text-3xl" />
+          </button>
+          {onNext && (
+            <button onClick={onNext} className="pointer-events-auto text-white/80 hover:text-white bg-black/40 rounded-full p-2 touch-manipulation">
+              <MdSkipNext className="text-3xl" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Bottom controls bar */}
+      <div className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent px-4 pb-3 pt-6 transition-opacity duration-300 ${showControls || !playing ? "opacity-100" : "opacity-0"}`}>
+
+        {isVOD && (
+          <div className="mb-2">
+            <div
+              ref={progressRef}
+              onMouseDown={onProgressDown}
+              onTouchStart={onProgressDown}
+              className="relative h-3 flex items-center cursor-pointer group/bar touch-manipulation"
+            >
+              <div className="absolute left-0 right-0 h-1 bg-white/20 rounded-full" />
+              <div className="absolute left-0 h-1 bg-white/30 rounded-full" style={{ width: `${bufferedPct}%` }} />
+              <div className="absolute left-0 h-1 bg-gold rounded-full" style={{ width: `${progressPct}%` }} />
+              <div
+                className="absolute w-3 h-3 bg-gold rounded-full -ml-1.5 opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                style={{ left: `${progressPct}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
 
-          {/* Play / Pause */}
           <button
             onClick={() => { const v = videoRef.current; v && (v.paused ? v.play().catch(() => {}) : v.pause()); }}
             className="text-white hover:text-gold transition-colors touch-manipulation"
           >
-            {playing
-              ? <MdPause className="text-3xl md:text-2xl" />
-              : <MdPlayArrow className="text-3xl md:text-2xl" />}
+            {playing ? <MdPause className="text-2xl" /> : <MdPlayArrow className="text-2xl" />}
           </button>
 
-          {/* Prev / Next */}
-          {onPrev && (
-            <button onClick={onPrev} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">&#9664;</button>
-          )}
-          {onNext && (
-            <button onClick={onNext} className="text-white/60 hover:text-white touch-manipulation px-1 text-lg">&#9654;</button>
+          {isVOD && (
+            <span className="text-white/80 text-xs tabular-nums">
+              {fmtTime(currentTime)} / {fmtTime(duration)}
+            </span>
           )}
 
-          {/* Volume */}
+          {isLive && (
+            <span className="flex items-center gap-1.5 text-xs text-white/80">
+              <span className="w-2 h-2 bg-live rounded-full animate-pulse" /> LIVE
+            </span>
+          )}
+
           <div className="flex items-center gap-2">
             <button
               onClick={() => { const v = videoRef.current; if (v) { v.muted = !muted; setMuted(!muted); } }}
               className="text-white hover:text-gold transition-colors touch-manipulation"
             >
               {muted || volume === 0
-                ? <MdVolumeOff className="text-2xl md:text-xl" />
-                : <MdVolumeUp className="text-2xl md:text-xl" />}
+                ? <MdVolumeOff className="text-xl" />
+                : <MdVolumeUp className="text-xl" />}
             </button>
             <input
               type="range" min="0" max="1" step="0.05"
@@ -398,14 +505,12 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
 
           <div className="flex-1" />
 
-          {/* Bandwidth (desktop only) */}
           {bandwidth > 0 && (
-            <span className="text-white/40 text-xs">
+            <span className="text-white/40 text-xs hidden md:inline">
               {bandwidth >= 1000 ? `${(bandwidth / 1000).toFixed(1)} Mb/s` : `${bandwidth} kb/s`}
             </span>
           )}
 
-          {/* Quality selector */}
           {levels.length > 1 && (
             <div className="relative group/qual">
               <button className="text-white/60 hover:text-white flex items-center gap-1 text-sm touch-manipulation">
@@ -429,11 +534,10 @@ export default function VideoPlayer({ src, title, onNext, onPrev, autoPlay = tru
             </div>
           )}
 
-          {/* Fullscreen */}
           <button onClick={toggleFullscreen} className="text-white hover:text-gold transition-colors touch-manipulation">
             {fullscreen
-              ? <MdFullscreenExit className="text-2xl md:text-xl" />
-              : <MdFullscreen className="text-2xl md:text-xl" />}
+              ? <MdFullscreenExit className="text-xl" />
+              : <MdFullscreen className="text-xl" />}
           </button>
 
         </div>
