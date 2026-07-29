@@ -287,9 +287,10 @@ class XtreamVODProxyView(APIView):
         if stream_type not in ("movie", "series"):
             stream_type = "movie"
 
-        ext = request.GET.get("ext", "mp4")
-        if ext not in ("mp4", "mkv", "avi"):
-            ext = "mp4"
+        requested_ext = request.GET.get("ext", "mp4")
+        if requested_ext not in ("mp4", "mkv", "avi"):
+            requested_ext = "mp4"
+        exts_to_try = [requested_ext] + [e for e in ("mp4", "mkv", "avi") if e != requested_ext]
 
         # Adult guard for movies (stream_id == xtream_id for movies).
         # For series, stream_id is the episode's xtream_id, not the parent series —
@@ -304,80 +305,81 @@ class XtreamVODProxyView(APIView):
 
         last_exc = None
         for server_url, username, password, user_agent in _iter_servers():
-            url = f"{server_url}/{stream_type}/{username}/{password}/{stream_id}.{ext}"
-            try:
-                # Step 1 — probe without Range to follow redirects and get the final IP URL.
-                # Sending Range directly on the domain triggers an HTML error response on
-                # some providers; the redirect target (direct IP + token) accepts Range fine.
-                probe = http_requests.get(
-                    url,
-                    headers={"User-Agent": user_agent},
-                    stream=True,
-                    allow_redirects=True,
-                    timeout=30,
-                )
-                if probe.status_code == 404:
+            for ext in exts_to_try:
+                url = f"{server_url}/{stream_type}/{username}/{password}/{stream_id}.{ext}"
+                try:
+                    # Step 1 — probe without Range to follow redirects and get the final IP URL.
+                    # Sending Range directly on the domain triggers an HTML error response on
+                    # some providers; the redirect target (direct IP + token) accepts Range fine.
+                    probe = http_requests.get(
+                        url,
+                        headers={"User-Agent": user_agent},
+                        stream=True,
+                        allow_redirects=True,
+                        timeout=30,
+                    )
+                    if probe.status_code == 404:
+                        probe.close()
+                        continue  # this ext doesn't exist, try the next one
+                    if not probe.ok:
+                        probe.close()
+                        last_exc = Exception(f"HTTP {probe.status_code} from {server_url}")
+                        continue
+
+                    probe_ct = probe.headers.get("Content-Type", "")
+                    final_url = probe.url
                     probe.close()
-                    return HttpResponse("Stream not found", status=404)
-                if not probe.ok:
-                    probe.close()
-                    last_exc = Exception(f"HTTP {probe.status_code} from {server_url}")
+
+                    if not _is_video_content_type(probe_ct):
+                        continue  # wrong content type for this ext, try the next one
+
+                    # Step 2 — real request on the resolved IP URL, with Range if requested.
+                    req_headers = {"User-Agent": user_agent}
+                    if range_header:
+                        req_headers["Range"] = range_header
+
+                    upstream = http_requests.get(
+                        final_url,
+                        headers=req_headers,
+                        stream=True,
+                        allow_redirects=True,
+                        timeout=30,
+                    )
+                    if not upstream.ok:
+                        upstream.close()
+                        last_exc = Exception(f"Range request HTTP {upstream.status_code}")
+                        continue
+
+                    content_type = upstream.headers.get("Content-Type", "video/mp4")
+                    if "text/html" in content_type:
+                        upstream.close()
+                        continue  # ext resolved to HTML, try the next one
+
+                    status_code = upstream.status_code  # 200 or 206
+
+                    def stream_gen(resp):
+                        try:
+                            for chunk in resp.iter_content(chunk_size=262144):
+                                if chunk:
+                                    yield chunk
+                        finally:
+                            resp.close()
+
+                    response = StreamingHttpResponse(
+                        stream_gen(upstream),
+                        status=status_code,
+                        content_type=content_type,
+                    )
+                    for h in ("Content-Length", "Content-Range", "Accept-Ranges"):
+                        if h in upstream.headers:
+                            response[h] = upstream.headers[h]
+                    response["Accept-Ranges"] = "bytes"
+                    response["Access-Control-Allow-Origin"] = "*"
+                    return response
+                except Exception as exc:
+                    logger.warning("VOD proxy error stream=%s server=%s ext=%s: %s", stream_id, server_url, ext, exc)
+                    last_exc = exc
                     continue
-
-                probe_ct = probe.headers.get("Content-Type", "")
-                final_url = probe.url
-                probe.close()
-
-                if not _is_video_content_type(probe_ct):
-                    return HttpResponse("Content unavailable", status=404)
-
-                # Step 2 — real request on the resolved IP URL, with Range if requested.
-                req_headers = {"User-Agent": user_agent}
-                if range_header:
-                    req_headers["Range"] = range_header
-
-                upstream = http_requests.get(
-                    final_url,
-                    headers=req_headers,
-                    stream=True,
-                    allow_redirects=True,
-                    timeout=30,
-                )
-                if not upstream.ok:
-                    upstream.close()
-                    last_exc = Exception(f"Range request HTTP {upstream.status_code}")
-                    continue
-
-                content_type = upstream.headers.get("Content-Type", "video/mp4")
-                if "text/html" in content_type:
-                    upstream.close()
-                    return HttpResponse("Content unavailable", status=404)
-
-                status_code = upstream.status_code  # 200 or 206
-
-                def stream_gen(resp):
-                    try:
-                        for chunk in resp.iter_content(chunk_size=262144):
-                            if chunk:
-                                yield chunk
-                    finally:
-                        resp.close()
-
-                response = StreamingHttpResponse(
-                    stream_gen(upstream),
-                    status=status_code,
-                    content_type=content_type,
-                )
-                for h in ("Content-Length", "Content-Range", "Accept-Ranges"):
-                    if h in upstream.headers:
-                        response[h] = upstream.headers[h]
-                response["Accept-Ranges"] = "bytes"
-                response["Access-Control-Allow-Origin"] = "*"
-                return response
-            except Exception as exc:
-                logger.warning("VOD proxy error stream=%s server=%s: %s", stream_id, server_url, exc)
-                last_exc = exc
-                continue
 
         logger.error("VOD all servers failed for stream=%s: %s", stream_id, last_exc)
         return HttpResponse(str(last_exc) if last_exc else "No server available", status=502)
