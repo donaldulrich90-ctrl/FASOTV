@@ -1,4 +1,5 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { LangProvider } from "./context/LangContext";
 import { AdultPinProvider } from "./context/AdultPinContext";
@@ -33,6 +34,26 @@ function Spinner() {
   return (
     <div className="w-10 h-10 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
   );
+}
+
+const TV_UA = /SmartTV|Tizen|Web0S|webOS|AndroidTV|AFT|BRAVIA|HbbTV/i;
+
+function TVSetup() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (TV_UA.test(navigator.userAgent)) {
+      document.body.classList.add("tv-mode");
+    }
+    const onKey = (e) => {
+      if (e.key === "Backspace" && !["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) {
+        e.preventDefault();
+        navigate(-1);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [navigate]);
+  return null;
 }
 
 function AppRoutes() {
@@ -71,6 +92,7 @@ export default function App() {
     <LangProvider>
       <AuthProvider>
         <AdultPinProvider>
+          <TVSetup />
           <AppRoutes />
         </AdultPinProvider>
       </AuthProvider>

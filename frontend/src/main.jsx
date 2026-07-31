@@ -2,8 +2,11 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
+import { init } from "@noriginmedia/norigin-spatial-navigation";
 import App from "./App";
 import "./index.css";
+
+init({ debug: false, visualDebug: false });
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

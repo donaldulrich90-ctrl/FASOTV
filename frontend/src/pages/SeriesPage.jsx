@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { isFavorite, addFavorite, removeFavorite } from "../utils/store";
 import useTranslation from "../hooks/useTranslation";
 import { useLanguages, useGenres } from "../hooks/useCatalog";
+import { setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusableItem, FocusableSection } from "../components/Focusable";
 import api from "../services/api";
 import {
   MdSearch, MdVideoLibrary, MdStar, MdPlayArrow, MdClose,
@@ -10,8 +12,6 @@ import {
 } from "react-icons/md";
 
 const SORT_OPTIONS = ["recent", "year", "alpha", "rating"];
-
-// ─── Skeleton ────────────────────────────────────────────────────────────────
 
 function SkeletonCard() {
   return (
@@ -23,12 +23,16 @@ function SkeletonCard() {
   );
 }
 
-// ─── Series Card ──────────────────────────────────────────────────────────────
-
-function SeriesCard({ series, onClick }) {
+function SeriesCard({ series, onClick, focusKey }) {
   const { t } = useTranslation();
   return (
-    <button onClick={onClick} className="group text-left w-full">
+    <FocusableItem
+      onClick={onClick}
+      onEnterPress={onClick}
+      focusKey={focusKey}
+      focusClass="ring-4 ring-gold scale-105 z-10 shadow-xl shadow-gold/30 rounded-card"
+      className="group text-left w-full cursor-pointer"
+    >
       <div className="aspect-[2/3] rounded-card overflow-hidden bg-card relative">
         {series.poster_url ? (
           <img
@@ -65,11 +69,9 @@ function SeriesCard({ series, onClick }) {
       </div>
       <p className="text-sm font-medium mt-2 truncate group-hover:text-gold transition-colors">{series.title}</p>
       <p className="text-xs text-white/40 truncate">{series.genre}</p>
-    </button>
+    </FocusableItem>
   );
 }
-
-// ─── Featured Hero ────────────────────────────────────────────────────────────
 
 function FeaturedHero({ onOpen }) {
   const { t } = useTranslation();
@@ -105,15 +107,18 @@ function FeaturedHero({ onOpen }) {
         <p className="text-white/60 text-sm mb-1">{item.genre} · {item.total_seasons} saison(s)</p>
         <h2 className="text-2xl md:text-3xl font-black mb-2">{item.title}</h2>
         <p className="text-white/60 text-sm mb-4 line-clamp-2 hidden md:block">{item.description}</p>
-        <button onClick={() => onOpen(item)} className="btn-primary flex items-center gap-2">
+        <FocusableItem
+          onClick={() => onOpen(item)}
+          onEnterPress={() => onOpen(item)}
+          className="btn-primary inline-flex items-center gap-2 w-fit cursor-pointer"
+          focusClass="ring-2 ring-white"
+        >
           <MdPlayArrow className="text-xl" /> {t("btn_regarder")}
-        </button>
+        </FocusableItem>
       </div>
     </div>
   );
 }
-
-// ─── Series Info Modal ────────────────────────────────────────────────────────
 
 function SeriesModal({ series, onClose }) {
   const { t } = useTranslation();
@@ -192,36 +197,36 @@ function SeriesModal({ series, onClose }) {
   );
 }
 
-// ─── Pill row ─────────────────────────────────────────────────────────────────
-
 function PillRow({ items, active, onSelect, getKey, getLabel, getCount }) {
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-      <button
+    <FocusableSection className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+      <FocusableItem
         onClick={() => onSelect(null)}
-        className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+        onEnterPress={() => onSelect(null)}
+        className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all cursor-pointer ${
           active === null ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
         }`}
+        focusClass="ring-2 ring-gold"
       >
         Tous
-      </button>
+      </FocusableItem>
       {items.map((item) => (
-        <button
+        <FocusableItem
           key={getKey(item)}
           onClick={() => onSelect(getKey(item) === active ? null : getKey(item))}
-          className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+          onEnterPress={() => onSelect(getKey(item) === active ? null : getKey(item))}
+          className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all cursor-pointer ${
             getKey(item) === active ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
           }`}
+          focusClass="ring-2 ring-gold"
         >
           {getLabel(item)}
           {getCount && <span className="ml-1 text-xs opacity-60">({getCount(item)})</span>}
-        </button>
+        </FocusableItem>
       ))}
-    </div>
+    </FocusableSection>
   );
 }
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SeriesPage() {
   const { t } = useTranslation();
@@ -237,6 +242,7 @@ export default function SeriesPage() {
   const [sort, setSort] = useState("recent");
   const [selected, setSelected] = useState(null);
   const loaderRef = useRef(null);
+  const initialFocusDone = useRef(false);
 
   const { languages } = useLanguages("series");
   const { genres } = useGenres("series", activeLang);
@@ -291,6 +297,13 @@ export default function SeriesPage() {
     return () => obs.disconnect();
   }, [hasMore, loadingMore]);
 
+  useEffect(() => {
+    if (!loading && seriesList.length > 0 && !initialFocusDone.current) {
+      initialFocusDone.current = true;
+      requestAnimationFrame(() => setFocus("series-card-0"));
+    }
+  }, [loading, seriesList.length]);
+
   const resetFilters = () => {
     setSearch("");
     setActiveLang(null);
@@ -313,19 +326,21 @@ export default function SeriesPage() {
         </div>
 
         {/* Sort bar */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+        <FocusableSection className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
           {SORT_OPTIONS.map((s) => (
-            <button
+            <FocusableItem
               key={s}
               onClick={() => setSort(s)}
-              className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+              onEnterPress={() => setSort(s)}
+              className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all cursor-pointer ${
                 sort === s ? "bg-gold/20 text-gold border border-gold/30 font-semibold" : "text-white/50 hover:text-white"
               }`}
+              focusClass="ring-2 ring-gold"
             >
               {t(`sort_${s}`)}
-            </button>
+            </FocusableItem>
           ))}
-        </div>
+        </FocusableSection>
 
         {/* Search */}
         <div className="flex gap-2">
@@ -381,11 +396,11 @@ export default function SeriesPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {seriesList.map((s) => (
-                <SeriesCard key={s.id} series={s} onClick={() => setSelected(s)} />
+            <FocusableSection className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {seriesList.map((s, i) => (
+                <SeriesCard key={s.id} series={s} focusKey={`series-card-${i}`} onClick={() => setSelected(s)} />
               ))}
-            </div>
+            </FocusableSection>
             <div ref={loaderRef} className="py-4 flex justify-center">
               {loadingMore && (
                 <div className="w-6 h-6 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />

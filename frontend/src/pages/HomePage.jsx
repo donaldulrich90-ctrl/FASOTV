@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useFeaturedChannels } from "../hooks/useChannels";
+import { FocusableItem, FocusableSection } from "../components/Focusable";
 import api from "../services/api";
 import { MdPlayArrow, MdLiveTv, MdMovie, MdStar, MdArrowForward } from "react-icons/md";
 
@@ -32,7 +33,6 @@ function HeroSlider({ channels }) {
     <div className="relative h-56 md:h-80 rounded-card overflow-hidden bg-card">
       <div className="absolute inset-0 bg-gradient-to-r from-bg/90 via-bg/50 to-transparent z-10" />
 
-      {/* Content */}
       <div className="absolute inset-0 z-20 flex flex-col justify-center px-8 md:px-12">
         <span className="badge-live inline-flex items-center gap-1.5 w-fit mb-4">
           <span className="w-1.5 h-1.5 bg-white rounded-full" />
@@ -42,16 +42,18 @@ function HeroSlider({ channels }) {
         {ch.category_name && (
           <p className="text-white/60 text-sm mb-6">{ch.category_name}</p>
         )}
-        <button
+        <FocusableItem
           onClick={() => navigate(`/player/live/${ch.id}`)}
-          className="btn-primary inline-flex items-center gap-2 w-fit"
+          onEnterPress={() => navigate(`/player/live/${ch.id}`)}
+          focusKey="hero-play"
+          className="btn-primary inline-flex items-center gap-2 w-fit cursor-pointer"
+          focusClass="ring-2 ring-white scale-105"
         >
           <MdPlayArrow className="text-xl" />
           Regarder maintenant
-        </button>
+        </FocusableItem>
       </div>
 
-      {/* Logo bg */}
       {ch.logo_url && (
         <img
           src={ch.logo_url}
@@ -60,7 +62,6 @@ function HeroSlider({ channels }) {
         />
       )}
 
-      {/* Dots */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
         {channels.map((_, i) => (
           <button
@@ -101,12 +102,15 @@ function ChannelCarousel({ title, channels }) {
           Tout voir <MdArrowForward />
         </button>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
-        {channels.slice(0, 10).map((ch) => (
-          <button
+      <FocusableSection className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+        {channels.slice(0, 10).map((ch, i) => (
+          <FocusableItem
             key={ch.id}
             onClick={() => navigate(`/player/live/${ch.id}`)}
-            className="flex-shrink-0 card p-3 w-28 text-center group"
+            onEnterPress={() => navigate(`/player/live/${ch.id}`)}
+            focusKey={`home-ch-${i}`}
+            focusClass="ring-4 ring-gold scale-105 z-10 shadow-xl shadow-gold/30 rounded-card"
+            className="flex-shrink-0 card p-3 w-28 text-center group cursor-pointer"
           >
             <div className="w-14 h-14 mx-auto rounded-btn bg-bg flex items-center justify-center mb-2 overflow-hidden">
               {ch.logo_url ? (
@@ -117,9 +121,9 @@ function ChannelCarousel({ title, channels }) {
             </div>
             <p className="text-xs font-medium truncate group-hover:text-gold transition-colors">{ch.name}</p>
             <span className="badge-live text-[10px] mt-1">LIVE</span>
-          </button>
+          </FocusableItem>
         ))}
-      </div>
+      </FocusableSection>
     </section>
   );
 }
@@ -137,12 +141,15 @@ function MovieCarousel({ title, movies }) {
           Tout voir <MdArrowForward />
         </button>
       </div>
-      <div className="flex gap-3 overflow-x-auto pb-2">
-        {movies.slice(0, 8).map((m) => (
-          <button
+      <FocusableSection className="flex gap-3 overflow-x-auto pb-2">
+        {movies.slice(0, 8).map((m, i) => (
+          <FocusableItem
             key={m.id}
             onClick={() => navigate(`/player/movie/${m.id}`)}
-            className="flex-shrink-0 group"
+            onEnterPress={() => navigate(`/player/movie/${m.id}`)}
+            focusKey={`home-movie-${i}`}
+            focusClass="ring-4 ring-gold scale-105 z-10 shadow-xl shadow-gold/30 rounded-card"
+            className="flex-shrink-0 group cursor-pointer"
           >
             <div className="w-28 h-40 rounded-card overflow-hidden bg-card relative">
               {m.poster_url ? (
@@ -163,9 +170,9 @@ function MovieCarousel({ title, movies }) {
             </div>
             <p className="text-xs font-medium mt-2 w-28 truncate text-left">{m.title}</p>
             <p className="text-xs text-white/40">{m.genre}</p>
-          </button>
+          </FocusableItem>
         ))}
-      </div>
+      </FocusableSection>
     </section>
   );
 }
@@ -193,13 +200,16 @@ export default function HomePage() {
           </h1>
         </div>
         {user && !user.has_active_subscription && (
-          <button
+          <FocusableItem
             onClick={() => navigate("/plans")}
-            className="btn-primary text-sm flex items-center gap-1"
+            onEnterPress={() => navigate("/plans")}
+            focusKey="home-subscribe"
+            className="btn-primary text-sm flex items-center gap-1 cursor-pointer"
+            focusClass="ring-2 ring-white scale-105"
           >
             <MdStar className="text-base" />
             S'abonner
-          </button>
+          </FocusableItem>
         )}
       </div>
 
@@ -220,9 +230,15 @@ export default function HomePage() {
             <p className="font-bold text-gold">Activez votre abonnement</p>
             <p className="text-sm text-white/50">Dès 200 FCFA/jour • Orange Money • Moov Money • Coris Money</p>
           </div>
-          <button onClick={() => navigate("/plans")} className="btn-primary text-sm flex-shrink-0">
+          <FocusableItem
+            onClick={() => navigate("/plans")}
+            onEnterPress={() => navigate("/plans")}
+            focusKey="home-plans-banner"
+            className="btn-primary text-sm flex-shrink-0 cursor-pointer"
+            focusClass="ring-2 ring-white scale-105"
+          >
             Voir les forfaits
-          </button>
+          </FocusableItem>
         </div>
       )}
 
@@ -244,12 +260,15 @@ export default function HomePage() {
               Tout voir <MdArrowForward />
             </button>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {series.slice(0, 4).map((s) => (
-              <button
+          <FocusableSection className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {series.slice(0, 4).map((s, i) => (
+              <FocusableItem
                 key={s.id}
                 onClick={() => navigate(`/series/${s.id}`)}
-                className="group text-left"
+                onEnterPress={() => navigate(`/series/${s.id}`)}
+                focusKey={`home-series-${i}`}
+                focusClass="ring-4 ring-gold scale-105 z-10 shadow-xl shadow-gold/30 rounded-card"
+                className="group text-left cursor-pointer"
               >
                 <div className="aspect-[2/3] rounded-card overflow-hidden bg-card relative">
                   {s.poster_url ? (
@@ -262,9 +281,9 @@ export default function HomePage() {
                 </div>
                 <p className="text-sm font-medium mt-2 truncate">{s.title}</p>
                 <p className="text-xs text-white/40">{s.total_seasons} saison{s.total_seasons > 1 ? "s" : ""}</p>
-              </button>
+              </FocusableItem>
             ))}
-          </div>
+          </FocusableSection>
         </section>
       )}
     </div>

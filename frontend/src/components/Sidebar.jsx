@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { FocusableItem, FocusableSection } from "./Focusable";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAdultPin } from "../context/AdultPinContext";
@@ -161,17 +162,25 @@ export default function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map(({ to, icon: Icon, key, end }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={end}
-              className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
-            >
-              <Icon className="text-xl flex-shrink-0" />
-              <span className="text-sm font-medium">{t(key)}</span>
-            </NavLink>
-          ))}
+          <FocusableSection focusKey="sidebar-nav" className="space-y-1">
+            {NAV_ITEMS.map(({ to, icon: Icon, key, end }) => (
+              <FocusableItem
+                key={to}
+                onEnterPress={() => navigate(to)}
+                focusClass="bg-gold/15 text-gold rounded-btn"
+                className="block"
+              >
+                <NavLink
+                  to={to}
+                  end={end}
+                  className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}
+                >
+                  <Icon className="text-xl flex-shrink-0" />
+                  <span className="text-sm font-medium">{t(key)}</span>
+                </NavLink>
+              </FocusableItem>
+            ))}
+          </FocusableSection>
         </nav>
 
         {/* Adult content tab */}
@@ -199,14 +208,18 @@ export default function Sidebar() {
 
         {/* Bottom */}
         <div className="px-3 pb-4 space-y-1 border-t border-border pt-3">
-          <NavLink to="/search" className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}>
-            <MdSearch className="text-xl flex-shrink-0" />
-            <span className="text-sm font-medium">{t("nav_search")}</span>
-          </NavLink>
-          <NavLink to="/settings" className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}>
-            <MdSettings className="text-xl flex-shrink-0" />
-            <span className="text-sm font-medium">{t("nav_settings")}</span>
-          </NavLink>
+          <FocusableItem onEnterPress={() => navigate("/search")} focusClass="bg-gold/15 text-gold rounded-btn" className="block">
+            <NavLink to="/search" className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}>
+              <MdSearch className="text-xl flex-shrink-0" />
+              <span className="text-sm font-medium">{t("nav_search")}</span>
+            </NavLink>
+          </FocusableItem>
+          <FocusableItem onEnterPress={() => navigate("/settings")} focusClass="bg-gold/15 text-gold rounded-btn" className="block">
+            <NavLink to="/settings" className={({ isActive }) => `sidebar-link ${isActive ? "active" : ""}`}>
+              <MdSettings className="text-xl flex-shrink-0" />
+              <span className="text-sm font-medium">{t("nav_settings")}</span>
+            </NavLink>
+          </FocusableItem>
 
           {/* Language selector */}
           <div ref={langRef} className="relative">

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import VideoPlayer from "../components/VideoPlayer";
+import { FocusableItem, FocusableSection } from "../components/Focusable";
 import api from "../services/api";
 import { MdArrowBack, MdLiveTv, MdInfo, MdFavorite, MdFavoriteBorder } from "react-icons/md";
 import toast from "react-hot-toast";
@@ -181,12 +182,15 @@ export default function PlayerPage() {
           {content.seasons.map((season) => (
             <div key={season.id} className="card p-4">
               <h3 className="font-semibold mb-3">{season.title || `Saison ${season.number}`}</h3>
-              <div className="space-y-2">
-                {season.episodes.map((ep) => (
-                  <button
+              <FocusableSection className="space-y-2">
+                {season.episodes.map((ep, i) => (
+                  <FocusableItem
                     key={ep.id}
                     onClick={() => navigate(`/player/episode/${ep.id}`)}
-                    className="w-full flex items-center gap-3 p-2 rounded-btn hover:bg-card-hover transition-colors text-left"
+                    onEnterPress={() => navigate(`/player/episode/${ep.id}`)}
+                    focusKey={`episode-${season.id}-${i}`}
+                    focusClass="ring-2 ring-gold rounded-btn"
+                    className="w-full flex items-center gap-3 p-2 rounded-btn hover:bg-card-hover transition-colors text-left cursor-pointer"
                   >
                     <div className="w-8 h-8 bg-bg rounded flex items-center justify-center flex-shrink-0">
                       <span className="text-xs text-white/50">{ep.number}</span>
@@ -196,9 +200,9 @@ export default function PlayerPage() {
                       {ep.duration && <p className="text-xs text-white/40">{ep.duration}min</p>}
                     </div>
                     <MdLiveTv className="text-white/30" />
-                  </button>
+                  </FocusableItem>
                 ))}
-              </div>
+              </FocusableSection>
             </div>
           ))}
         </div>

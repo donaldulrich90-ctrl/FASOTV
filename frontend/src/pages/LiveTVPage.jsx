@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePaginatedChannels } from "../hooks/useChannels";
 import { useLanguages } from "../hooks/useCatalog";
+import { setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusableItem, FocusableSection } from "../components/Focusable";
 import { MdSearch, MdLiveTv, MdFavorite, MdFavoriteBorder, MdPeople } from "react-icons/md";
 import api from "../services/api";
 import toast from "react-hot-toast";
@@ -12,61 +14,75 @@ function SkeletonCard() {
 
 function LangFilter({ languages, active, onChange }) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-      <button
+    <FocusableSection className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <FocusableItem
         onClick={() => onChange(null)}
-        className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all ${
+        onEnterPress={() => onChange(null)}
+        className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all cursor-pointer ${
           active === null ? "bg-gold text-black" : "bg-card text-white/60 hover:text-white"
         }`}
+        focusClass="ring-2 ring-gold"
       >
         Tous
-      </button>
+      </FocusableItem>
       {languages.map((l) => (
-        <button
+        <FocusableItem
           key={l.code}
           onClick={() => onChange(l.code === active ? null : l.code)}
-          className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all ${
+          onEnterPress={() => onChange(l.code === active ? null : l.code)}
+          className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all cursor-pointer ${
             active === l.code ? "bg-gold text-black" : "bg-card text-white/60 hover:text-white"
           }`}
+          focusClass="ring-2 ring-gold"
         >
           {l.label}
           <span className="ml-1 text-xs opacity-60">({l.count})</span>
-        </button>
+        </FocusableItem>
       ))}
-    </div>
+    </FocusableSection>
   );
 }
 
 function CategoryFilter({ categories, active, onChange }) {
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
-      <button
+    <FocusableSection className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <FocusableItem
         onClick={() => onChange(null)}
-        className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all ${
+        onEnterPress={() => onChange(null)}
+        className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all cursor-pointer ${
           active === null ? "bg-gold/80 text-black" : "bg-card/60 text-white/50 hover:text-white"
         }`}
+        focusClass="ring-2 ring-gold"
       >
         Catégories
-      </button>
+      </FocusableItem>
       {categories.map((cat) => (
-        <button
+        <FocusableItem
           key={cat.id}
           onClick={() => onChange(cat.id === active ? null : cat.id)}
-          className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all ${
+          onEnterPress={() => onChange(cat.id === active ? null : cat.id)}
+          className={`flex-shrink-0 px-4 py-1.5 rounded-badge text-sm font-medium transition-all cursor-pointer ${
             active === cat.id ? "bg-gold/80 text-black" : "bg-card/60 text-white/50 hover:text-white"
           }`}
+          focusClass="ring-2 ring-gold"
         >
           {cat.name}
           <span className="ml-1 text-xs opacity-60">({cat.channel_count || 0})</span>
-        </button>
+        </FocusableItem>
       ))}
-    </div>
+    </FocusableSection>
   );
 }
 
-function ChannelCard({ channel, onPlay, onFav, isFav }) {
+function ChannelCard({ channel, onPlay, onFav, isFav, focusKey }) {
   return (
-    <div className="card p-3 flex items-center gap-3 group cursor-pointer" onClick={onPlay}>
+    <FocusableItem
+      onClick={onPlay}
+      onEnterPress={onPlay}
+      focusKey={focusKey}
+      focusClass="ring-4 ring-gold scale-[1.02] z-10 shadow-xl shadow-gold/30 rounded-card"
+      className="card p-3 flex items-center gap-3 group cursor-pointer"
+    >
       <div className="w-12 h-12 rounded-btn bg-bg flex items-center justify-center flex-shrink-0 overflow-hidden">
         {channel.logo_url ? (
           <img src={channel.logo_url} alt={channel.name} className="w-full h-full object-contain" />
@@ -93,7 +109,7 @@ function ChannelCard({ channel, onPlay, onFav, isFav }) {
       >
         {isFav ? <MdFavorite /> : <MdFavoriteBorder />}
       </button>
-    </div>
+    </FocusableItem>
   );
 }
 
@@ -105,6 +121,7 @@ export default function LiveTVPage() {
   const [categories, setCategories] = useState([]);
   const [favorites, setFavorites] = useState(new Set());
   const loaderRef = useRef(null);
+  const initialFocusDone = useRef(false);
   const navigate = useNavigate();
 
   const { languages } = useLanguages("live");
@@ -133,6 +150,13 @@ export default function LiveTVPage() {
     obs.observe(loaderRef.current);
     return () => obs.disconnect();
   }, [hasMore, loadingMore, loadMore]);
+
+  useEffect(() => {
+    if (!loading && channels.length > 0 && !initialFocusDone.current) {
+      initialFocusDone.current = true;
+      requestAnimationFrame(() => setFocus("live-card-0"));
+    }
+  }, [loading, channels.length]);
 
   const toggleFav = async (channel) => {
     try {
@@ -170,12 +194,10 @@ export default function LiveTVPage() {
         />
       </div>
 
-      {/* Niveau 1 : langue */}
       {languages.length > 0 && (
         <LangFilter languages={languages} active={activeLang} onChange={setActiveLang} />
       )}
 
-      {/* Niveau 2 : catégorie */}
       <CategoryFilter categories={categories} active={activeCategory} onChange={setActiveCategory} />
 
       {loading ? (
@@ -189,17 +211,18 @@ export default function LiveTVPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {channels.map((ch) => (
+          <FocusableSection className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {channels.map((ch, i) => (
               <ChannelCard
                 key={ch.id}
                 channel={ch}
+                focusKey={`live-card-${i}`}
                 onPlay={() => navigate(`/player/live/${ch.id}`)}
                 onFav={() => toggleFav(ch)}
                 isFav={favorites.has(ch.id)}
               />
             ))}
-          </div>
+          </FocusableSection>
           <div ref={loaderRef} className="py-4 text-center text-white/30 text-sm">
             {loadingMore && (
               <div className="w-6 h-6 border-2 border-gold/20 border-t-gold rounded-full animate-spin mx-auto" />

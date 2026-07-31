@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { MdRadio, MdSearch, MdPlayArrow, MdPause, MdStop } from "react-icons/md";
+import { setFocus } from "@noriginmedia/norigin-spatial-navigation";
+import { FocusableItem, FocusableSection } from "../components/Focusable";
 import api from "../services/api";
 import { useRadioPlayer } from "../context/RadioPlayerContext";
 import useTranslation from "../hooks/useTranslation";
@@ -16,14 +18,18 @@ function SkeletonCard() {
   );
 }
 
-function StationCard({ channel }) {
+function StationCard({ channel, focusKey }) {
   const { station, playing, play, toggle } = useRadioPlayer();
   const isActive = station?.id === channel.id;
+  const handleAction = () => isActive ? toggle() : play(channel);
 
   return (
-    <button
-      onClick={() => (isActive ? toggle() : play(channel))}
-      className={`card p-4 flex items-center gap-3 transition-all w-full text-left ${
+    <FocusableItem
+      onClick={handleAction}
+      onEnterPress={handleAction}
+      focusKey={focusKey}
+      focusClass="ring-4 ring-gold z-10 shadow-xl shadow-gold/30 rounded-card"
+      className={`card p-4 flex items-center gap-3 transition-all w-full text-left cursor-pointer ${
         isActive ? "border-gold/40 bg-gold/5" : "hover:border-white/20"
       }`}
     >
@@ -49,7 +55,7 @@ function StationCard({ channel }) {
       }`}>
         {isActive && playing ? <MdPause className="text-lg" /> : <MdPlayArrow className="text-lg" />}
       </div>
-    </button>
+    </FocusableItem>
   );
 }
 
@@ -60,6 +66,7 @@ export default function RadioPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const initialFocusDone = useRef(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 400);
@@ -75,6 +82,13 @@ export default function RadioPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [debouncedSearch]);
+
+  useEffect(() => {
+    if (!loading && stations.length > 0 && !initialFocusDone.current) {
+      initialFocusDone.current = true;
+      requestAnimationFrame(() => setFocus("radio-station-0"));
+    }
+  }, [loading, stations.length]);
 
   return (
     <div className="p-4 md:p-6 space-y-5 animate-fade-in">
@@ -128,9 +142,11 @@ export default function RadioPage() {
           <p>Aucune station radio trouvée</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {stations.map((ch) => <StationCard key={ch.id} channel={ch} />)}
-        </div>
+        <FocusableSection className="space-y-2">
+          {stations.map((ch, i) => (
+            <StationCard key={ch.id} channel={ch} focusKey={`radio-station-${i}`} />
+          ))}
+        </FocusableSection>
       )}
     </div>
   );

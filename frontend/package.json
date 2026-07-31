@@ -10,6 +10,7 @@
     "lint": "eslint src --ext .js,.jsx"
   },
   "dependencies": {
+    "@noriginmedia/norigin-spatial-navigation": "^3.2.1",
     "@videojs/http-streaming": "^3.13.3",
     "axios": "^1.7.3",
     "date-fns": "^3.6.0",

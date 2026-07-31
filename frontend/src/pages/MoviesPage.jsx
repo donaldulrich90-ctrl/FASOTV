@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { setFocus } from "@noriginmedia/norigin-spatial-navigation";
 import { isFavorite, addFavorite, removeFavorite } from "../utils/store";
 import useTranslation from "../hooks/useTranslation";
 import { useLanguages, useGenres } from "../hooks/useCatalog";
 import api from "../services/api";
 import VideoPlayer from "../components/VideoPlayer";
+import { FocusableItem, FocusableSection } from "../components/Focusable";
 import {
   MdSearch, MdMovie, MdStar, MdPlayArrow, MdClose,
   MdFavorite, MdFavoriteBorder, MdWhatsapp,
@@ -32,9 +34,15 @@ function SkeletonCard() {
 
 // ─── Movie Card ───────────────────────────────────────────────────────────────
 
-function MovieCard({ movie, onClick }) {
+function MovieCard({ movie, onClick, focusKey }) {
   return (
-    <button onClick={onClick} className="group text-left w-full">
+    <FocusableItem
+      onClick={onClick}
+      onEnterPress={onClick}
+      focusKey={focusKey}
+      focusClass="ring-4 ring-gold scale-105 z-10 shadow-xl shadow-gold/30 rounded-card"
+      className="group text-left w-full cursor-pointer"
+    >
       <div className="aspect-[2/3] rounded-card overflow-hidden bg-card relative">
         {movie.poster_url ? (
           <img
@@ -72,7 +80,7 @@ function MovieCard({ movie, onClick }) {
         {movie.year && <><span>·</span><span>{movie.year}</span></>}
         {movie.duration && <><span>·</span><span>{movie.duration}min</span></>}
       </div>
-    </button>
+    </FocusableItem>
   );
 }
 
@@ -182,28 +190,32 @@ function MovieModal({ movie, onClose }) {
 
 function PillRow({ items, active, onSelect, getKey, getLabel, getCount }) {
   return (
-    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-      <button
+    <FocusableSection className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+      <FocusableItem
         onClick={() => onSelect(null)}
-        className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+        onEnterPress={() => onSelect(null)}
+        className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all cursor-pointer ${
           active === null ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
         }`}
+        focusClass="ring-2 ring-gold"
       >
         Tous
-      </button>
+      </FocusableItem>
       {items.map((item) => (
-        <button
+        <FocusableItem
           key={getKey(item)}
           onClick={() => onSelect(getKey(item) === active ? null : getKey(item))}
-          className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+          onEnterPress={() => onSelect(getKey(item) === active ? null : getKey(item))}
+          className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all cursor-pointer ${
             getKey(item) === active ? "bg-gold text-black font-semibold" : "bg-card text-white/60 hover:text-white"
           }`}
+          focusClass="ring-2 ring-gold"
         >
           {getLabel(item)}
           {getCount && <span className="ml-1 text-xs opacity-60">({getCount(item)})</span>}
-        </button>
+        </FocusableItem>
       ))}
-    </div>
+    </FocusableSection>
   );
 }
 
@@ -262,6 +274,15 @@ export default function MoviesPage() {
     return () => { cancelled = true; };
   }, [page, debouncedSearch, activeLang, activeGenre, activeYear, sort]);
 
+  // Initial TV focus on first card
+  const initialFocusDone = useRef(false);
+  useEffect(() => {
+    if (!loading && movies.length > 0 && !initialFocusDone.current) {
+      initialFocusDone.current = true;
+      requestAnimationFrame(() => setFocus('movies-card-0'));
+    }
+  }, [loading, movies.length]);
+
   // Infinite scroll
   useEffect(() => {
     if (!loaderRef.current) return;
@@ -296,9 +317,9 @@ export default function MoviesPage() {
         </div>
 
         {/* Quick tabs */}
-        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+        <FocusableSection className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
           {QUICK_TABS.map((tab) => (
-            <button
+            <FocusableItem
               key={tab.label}
               onClick={() => {
                 setSearch("");
@@ -307,27 +328,37 @@ export default function MoviesPage() {
                 setActiveYear(tab.params.year || null);
                 if (tab.params.sort) setSort(tab.params.sort);
               }}
-              className="flex-shrink-0 px-3 py-1.5 rounded-badge text-sm bg-card text-white/60 hover:text-white hover:bg-card/80 transition-all"
+              onEnterPress={() => {
+                setSearch("");
+                setActiveLang(tab.params.lang || null);
+                setActiveGenre(tab.params.genre || null);
+                setActiveYear(tab.params.year || null);
+                if (tab.params.sort) setSort(tab.params.sort);
+              }}
+              className="flex-shrink-0 px-3 py-1.5 rounded-badge text-sm bg-card text-white/60 hover:text-white hover:bg-card/80 transition-all cursor-pointer"
+              focusClass="ring-2 ring-gold"
             >
               {tab.label}
-            </button>
+            </FocusableItem>
           ))}
-        </div>
+        </FocusableSection>
 
         {/* Sort bar */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+        <FocusableSection className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
           {SORT_OPTIONS.map((s) => (
-            <button
+            <FocusableItem
               key={s}
               onClick={() => setSort(s)}
-              className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all ${
+              onEnterPress={() => setSort(s)}
+              className={`flex-shrink-0 px-3 py-1 rounded-badge text-sm transition-all cursor-pointer ${
                 sort === s ? "bg-gold/20 text-gold border border-gold/30 font-semibold" : "text-white/50 hover:text-white"
               }`}
+              focusClass="ring-2 ring-gold"
             >
               {t(`sort_${s}`)}
-            </button>
+            </FocusableItem>
           ))}
-        </div>
+        </FocusableSection>
 
         {/* Search */}
         <div className="flex gap-2">
@@ -384,11 +415,11 @@ export default function MoviesPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {movies.map((m) => (
-                <MovieCard key={m.id} movie={m} onClick={() => setPlaying(m)} />
+            <FocusableSection className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+              {movies.map((m, i) => (
+                <MovieCard key={m.id} movie={m} onClick={() => setPlaying(m)} focusKey={`movies-card-${i}`} />
               ))}
-            </div>
+            </FocusableSection>
             <div ref={loaderRef} className="py-4 flex justify-center">
               {loadingMore && (
                 <div className="w-6 h-6 border-2 border-gold/20 border-t-gold rounded-full animate-spin" />
