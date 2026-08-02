@@ -21,7 +21,7 @@ function HeroSlider({ channels }) {
       <div className="relative h-56 md:h-80 bg-gradient-to-r from-surface to-card rounded-card flex items-center justify-center">
         <div className="text-center">
           <MdLiveTv className="text-gold text-5xl mx-auto mb-2" />
-          <p className="text-white font-bold text-xl">FASO TV</p>
+          <p className="text-white font-bold text-xl">Wisdom</p>
           <p className="text-white/40 text-sm">Chargement des chaînes…</p>
         </div>
       </div>

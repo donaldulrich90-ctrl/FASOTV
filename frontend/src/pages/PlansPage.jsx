@@ -200,7 +200,7 @@ export default function PlansPage() {
       <div className="text-center">
         <div className="flex items-center justify-center gap-2 mb-2">
           <MdStar className="text-gold text-2xl" />
-          <h1 className="text-2xl font-bold">Forfaits FASO TV</h1>
+          <h1 className="text-2xl font-bold">Forfaits Wisdom</h1>
         </div>
         <p className="text-white/50 text-sm">Payez par Mobile Money — Orange Money, Moov Money, Coris Money</p>
       </div>

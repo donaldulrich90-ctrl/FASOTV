@@ -245,7 +245,7 @@ function MyVPNSection({ account }) {
 
   const shareWA = () => {
     const text = encodeURIComponent(
-      `🔒 Mes identifiants FASO VPN\n\n${Object.entries(credentials).map(([k, v]) => `${k} : ${v}`).join("\n")}\n\n📱 Guide de connexion dans l'app FASO TV`
+      `🔒 Mes identifiants FASO VPN\n\n${Object.entries(credentials).map(([k, v]) => `${k} : ${v}`).join("\n")}\n\n📱 Guide de connexion dans l'app Wisdom`
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };

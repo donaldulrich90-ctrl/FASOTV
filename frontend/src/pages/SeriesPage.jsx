@@ -139,7 +139,7 @@ function SeriesModal({ series, onClose }) {
   };
 
   const shareWA = () => {
-    const text = encodeURIComponent(`📺 ${series.title} — à voir sur FASO TV\n${series.description || ""}`);
+    const text = encodeURIComponent(`📺 ${series.title} — à voir sur Wisdom\n${series.description || ""}`);
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };
 

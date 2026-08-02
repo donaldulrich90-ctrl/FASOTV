@@ -44,7 +44,7 @@ function ClipPlayerModal({ clip, allClips, onClose }) {
   };
 
   const shareWA = () => {
-    const msg = encodeURIComponent(`Regarde ce clip sur FASO TV 🎵 ${currentClip.title} - ${currentClip.artist} 👉 https://youtube.com/watch?v=${currentClip.youtube_id}`);
+    const msg = encodeURIComponent(`Regarde ce clip sur Wisdom 🎵 ${currentClip.title} - ${currentClip.artist} 👉 https://youtube.com/watch?v=${currentClip.youtube_id}`);
     window.open(`https://wa.me/?text=${msg}`, "_blank");
   };
 
@@ -55,7 +55,7 @@ function ClipPlayerModal({ clip, allClips, onClose }) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <MdMusicNote className="text-gold text-xl" />
-            <span className="font-semibold">FASO TV Clips</span>
+            <span className="font-semibold">Wisdom Clips</span>
           </div>
           <button onClick={onClose} className="text-white/40 hover:text-white p-2">
             <MdClose className="text-2xl" />
@@ -311,7 +311,7 @@ function HeroSection({ heroClips, onPlay }) {
       <div className="relative rounded-card overflow-hidden bg-gradient-to-r from-[#0a0a1f] to-[#1a0a2e] p-8 md:p-12">
         <div className="flex items-center gap-2 mb-4">
           <MdMusicNote className="text-gold text-3xl" />
-          <span className="text-gold font-black text-xl">FASO TV Clips</span>
+          <span className="text-gold font-black text-xl">Wisdom Clips</span>
         </div>
         <h1 className="text-3xl md:text-5xl font-black mb-3">Le meilleur de la<br />musique africaine</h1>
         <p className="text-white/50 text-lg">Clips, gospel, comédie et bien plus</p>

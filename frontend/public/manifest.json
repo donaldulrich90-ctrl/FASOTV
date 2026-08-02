@@ -1,6 +1,6 @@
 {
-  "name": "FASO TV",
-  "short_name": "FASO TV",
+  "name": "Wisdom",
+  "short_name": "Wisdom",
   "description": "Plateforme IPTV de FASO ÉQUIPEMENTS STORE",
   "start_url": "/",
   "display": "standalone",

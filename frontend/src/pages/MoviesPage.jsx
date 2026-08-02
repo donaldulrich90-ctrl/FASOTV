@@ -148,7 +148,7 @@ function MovieModal({ movie, onClose }) {
   };
 
   const shareWA = () => {
-    const text = encodeURIComponent(`🎬 ${movie.title} (${movie.year}) — à voir sur FASO TV\n${movie.description || ""}`);
+    const text = encodeURIComponent(`🎬 ${movie.title} (${movie.year}) — à voir sur Wisdom\n${movie.description || ""}`);
     window.open(`https://wa.me/?text=${text}`, "_blank");
   };
 

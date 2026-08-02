@@ -112,10 +112,10 @@ const translations = {
     di: "A saratiw ye"
   },
   home_welcome: {
-    fr: "Bienvenue sur FASO TV",
-    en: "Welcome to FASO TV",
-    mo: "Nè y wʋʋngo FASO TV",
-    di: "Aw ni ce FASO TV la"
+    fr: "Bienvenue sur Wisdom",
+    en: "Welcome to Wisdom",
+    mo: "Nè y wʋʋngo Wisdom",
+    di: "Aw ni ce Wisdom la"
   },
   home_subtitle: {
     fr: "Votre plateforme de divertissement burkinabè",
@@ -1023,10 +1023,10 @@ const translations = {
   },
   msg_copy_success: { fr: "Copié !", en: "Copied!", mo: "Lebsame!", di: "A kopira!" },
   msg_share_text: {
-    fr: "Rejoignez FASO TV — la meilleure plateforme de divertissement burkinabè !",
-    en: "Join FASO TV — the best Burkinabè entertainment platform!",
-    mo: "Wa-y FASO TV — Burkĩna noog-m-mengã zĩig sẽn yɩɩd fãa!",
-    di: "Na FASO TV — Burkina ɲɛnajɛ yɔrɔ ɲumanba!"
+    fr: "Rejoignez Wisdom — la meilleure plateforme de divertissement burkinabè !",
+    en: "Join Wisdom — the best Burkinabè entertainment platform!",
+    mo: "Wa-y Wisdom — Burkĩna noog-m-mengã zĩig sẽn yɩɩd fãa!",
+    di: "Na Wisdom — Burkina ɲɛnajɛ yɔrɔ ɲumanba!"
   },
   msg_offline: {
     fr: "Vous êtes hors connexion",
@@ -1074,10 +1074,10 @@ const translations = {
     di: "Bɛɛ bɛ changeli"
   },
   pwa_install: {
-    fr: "📲 Installer FASO TV",
-    en: "📲 Install FASO TV",
-    mo: "📲 Sik-y FASO TV",
-    di: "📲 FASO TV bila"
+    fr: "📲 Installer Wisdom",
+    en: "📲 Install Wisdom",
+    mo: "📲 Sik-y Wisdom",
+    di: "📲 Wisdom bila"
   },
 
   // ══════════════════════════════════════

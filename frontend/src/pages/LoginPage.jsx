@@ -211,7 +211,7 @@ export default function LoginPage() {
         </div>
 
         <p className="text-center text-white/30 text-xs mt-6">
-          © 2024 FASO TV — FASO ÉQUIPEMENTS STORE, Ouagadougou
+          © 2024 Wisdom — FASO ÉQUIPEMENTS STORE, Ouagadougou
         </p>
       </div>
     </div>

@@ -34,7 +34,7 @@ export default function BecomeResellerPage() {
       // Try to also register via API (non-blocking)
       try { await api.post("/resellers/register/", form); } catch {}
       await refreshUser();
-      toast.success("Félicitations ! Vous êtes maintenant revendeur FASO TV.");
+      toast.success("Félicitations ! Vous êtes maintenant revendeur Wisdom.");
       navigate("/reseller");
     } catch (err) {
       toast.error("Une erreur est survenue");
@@ -57,7 +57,7 @@ export default function BecomeResellerPage() {
         <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gold/10 mb-4">
           <MdMonetizationOn className="text-gold text-3xl" />
         </div>
-        <h1 className="text-2xl font-black mb-2">Devenez Revendeur FASO TV</h1>
+        <h1 className="text-2xl font-black mb-2">Devenez Revendeur Wisdom</h1>
         <p className="text-white/50 text-sm max-w-md mx-auto">
           Recrutez des abonnés et gagnez des commissions sur chaque paiement.
           Retrait direct sur Mobile Money.
@@ -124,7 +124,7 @@ export default function BecomeResellerPage() {
               Motivation / Zone d'activité <span className="text-white/30">(optionnel)</span>
             </label>
             <textarea
-              placeholder="Ex: Je suis actif à Ouagadougou secteur 22, je veux proposer FASO TV à mon quartier..."
+              placeholder="Ex: Je suis actif à Ouagadougou secteur 22, je veux proposer Wisdom à mon quartier..."
               value={form.motivation}
               onChange={set("motivation")}
               rows={3}

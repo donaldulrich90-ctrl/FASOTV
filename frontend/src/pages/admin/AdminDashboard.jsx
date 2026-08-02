@@ -31,7 +31,7 @@ export default function AdminDashboard() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-black">Dashboard</h1>
-        <p className="text-white/40 text-sm mt-0.5">Vue d'ensemble de l'activité FASO TV</p>
+        <p className="text-white/40 text-sm mt-0.5">Vue d'ensemble de l'activité Wisdom</p>
       </div>
 
       {/* Revenue total */}

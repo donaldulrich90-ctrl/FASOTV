@@ -128,7 +128,7 @@ function ConfirmationPage({ promo, onTrack, onNew }) {
         <MdCheck className="text-success text-4xl" />
       </div>
       <h2 className="text-2xl font-black">Promotion lancée !</h2>
-      <p className="text-white/50">Votre contenu est maintenant visible par <span className="text-gold font-bold">12 000+ abonnés</span> FASO TV !</p>
+      <p className="text-white/50">Votre contenu est maintenant visible par <span className="text-gold font-bold">12 000+ abonnés</span> Wisdom !</p>
 
       <div className="card p-4 w-full text-left space-y-2 text-sm">
         <p className="font-semibold text-white/70 mb-2">Récapitulatif</p>
@@ -229,7 +229,7 @@ export default function PromotePage() {
             <span className="text-purple-400 font-semibold text-sm uppercase tracking-wider">Promotion</span>
           </div>
           <h1 className="text-3xl md:text-4xl font-black mb-3">
-            Faites découvrir votre contenu<br />à <span className="text-gold">12 000+ abonnés</span> FASO TV
+            Faites découvrir votre contenu<br />à <span className="text-gold">12 000+ abonnés</span> Wisdom
           </h1>
           <p className="text-white/60 text-lg mb-6">Artistes, entreprises, événements — boostez votre visibilité</p>
           <div className="flex flex-wrap gap-4 text-sm">

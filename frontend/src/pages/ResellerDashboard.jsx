@@ -107,7 +107,7 @@ function CodeParrainageCard({ reseller }) {
   const copy = () => { navigator.clipboard.writeText(code); toast.success("Code copié !"); };
   const copyLink = () => { navigator.clipboard.writeText(link); toast.success("Lien copié !"); };
   const shareWA = () => {
-    const msg = encodeURIComponent(`Abonne-toi à FASO TV avec mon code *${code}* et profite de la TV en direct, films et séries !\n\nLien : ${link}`);
+    const msg = encodeURIComponent(`Abonne-toi à Wisdom avec mon code *${code}* et profite de la TV en direct, films et séries !\n\nLien : ${link}`);
     window.open(`https://wa.me/?text=${msg}`, "_blank");
   };
 
@@ -408,7 +408,7 @@ export default function ResellerDashboard() {
         <MdMonetizationOn className="text-gold text-5xl mb-4" />
         <h2 className="text-xl font-bold mb-2">Vous n'êtes pas encore revendeur</h2>
         <p className="text-white/40 text-sm mb-6">
-          Devenez revendeur FASO TV et gagnez des commissions sur chaque abonnement.
+          Devenez revendeur Wisdom et gagnez des commissions sur chaque abonnement.
         </p>
         <button onClick={() => navigate("/become-reseller")} className="btn-primary flex items-center gap-2">
           {t("res_devenir")} <MdArrowForward />
